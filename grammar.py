@@ -73,14 +73,14 @@ class Optional(object):
 
 
 class Capture(object):
-    def __init__(self, key, child):
-        self.key = key
+    def __init__(self, name, child):
+        self.name = name
         self.child = child
 
     def serialize(self):
         return {
             "type": "capture",
-            "key": self.key,
+            "name": self.name,
             "child": self.child.serialize()
         }
 
