@@ -1,10 +1,14 @@
-import json
+from grammar import (Alternative, Sequence, Repetition,
+                     Optional, Word, Capture, List, RuleRef,
+                     Dictation, DictationWord, SpellingLetter)
 
 
 class GrammarParser(object):
-    def __init__(self, s):
+    def __init__(self, s, **extras):
         self._s = s
         self._pos = 0
+
+        self._extras = extras
 
     def parse(self):
         return self._element()
@@ -14,13 +18,13 @@ class GrammarParser(object):
             self._pos += 1
 
     def _token(self, token):
-        self._skip_spaces()
-        assert(self._s[self._pos] == token)
-        self._pos += 1
+        t = self._next()
+        assert(t == token)
 
     def _next(self, skip=True):
         t = self._peek(skip)
-        self._pos += 1
+        if t is not None:
+            self._pos += 1
         return t
 
     def _peek(self, skip=True):
@@ -50,15 +54,12 @@ class GrammarParser(object):
         if len(options) == 1:
             return options[0]
         else:
-            return {
-                "type": "alternative",
-                "children": options
-            }
+            return Alternative(options)
 
     def _sequence(self):
         children = []
         children.append(self._mayberepetition())
-        sequence_start = set(['[', '<', '{', '#', '(', '`'])
+        sequence_start = set(['[', '<', '{', '#', '(', '`', '&', '~'])
         t = self._peek()
         while t is not None and (t in sequence_start or t.isalnum()):
             children.append(self._mayberepetition())
@@ -67,19 +68,13 @@ class GrammarParser(object):
         if len(children) == 1:
             return children[0]
         else:
-            return {
-                "type": "sequence",
-                "children": children
-            }
+            return Sequence(children)
 
     def _mayberepetition(self):
         child = self._atom()
         if self._peek() == '*':
             self._token('*')
-            return {
-                "type": "repetition",
-                "child": child
-            }
+            return Repetition(child)
         else:
             return child
 
@@ -98,38 +93,45 @@ class GrammarParser(object):
             a = self._alternative()
             self._token(')')
             return a
+        elif t == '&':
+            return self._splice()
+        elif t == '~':
+            return self._special()
         else:
-            return {
-                "type": "word",
-                "text": self._word()
-            }
+            return Word(self._word())
+
+    def _special(self):
+        self._token('~')
+        w = self._word()
+        rules = {
+            'dictation': Dictation(),
+            'word': DictationWord(),
+            'letter': SpellingLetter()
+        }
+        return rules[w]
+
+    def _splice(self):
+        self._token('&')
+        w = self._word()
+        return self._extras[w]
 
     def _optional(self):
         self._token('[')
         child = self._alternative()
         self._token(']')
-        return {
-            "type": "optional",
-            "child": child
-        }
+        return Optional(child)
 
     def _ruleref(self):
         self._token('<')
         w = self._word()
         self._token('>')
-        return {
-            "type": "rule_ref",
-            "name": w
-        }
+        return RuleRef(w)
 
     def _list(self):
         self._token('{')
         w = self._word()
         self._token('}')
-        return {
-            "type": "list",
-            "name": w
-        }
+        return List(w)
 
     def _capture(self):
         self._token('#')
@@ -138,11 +140,7 @@ class GrammarParser(object):
         self._token('@')
         child = self._alternative()
         self._token(')')
-        return {
-            "type": "capture",
-            "name": name,
-            "child": child
-        }
+        return Capture(name, child)
 
     def _word(self):
         t = self._peek()
@@ -155,16 +153,20 @@ class GrammarParser(object):
             return ''.join(word)
         else:
             word = []
-            while self._peek(skip=False).isalnum():
+            t = self._peek(skip=False)
+            while t is not None and t.isalnum():
                 word.append(self._next(skip=False))
+                t = self._peek(skip=False)
             return ''.join(word)
 
 
+def parse(s, **extras):
+    p = GrammarParser(s, **extras)
+    return p.parse()
+
+
 def main():
-    try:
-        print(GrammarParser('my grammar press #(keys@(mint|soap)*)').parse())
-    except:
-        print('error')
+    print(parse('snake case ~dictation').serialize())
 
 
 if __name__ == '__main__':
