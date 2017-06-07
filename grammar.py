@@ -1,10 +1,11 @@
 import json
+from collections import namedtuple
 
 
-class Grammar(object):
-    def __init__(self, rules):
-        self.rules = rules
+GrammarBase = namedtuple('Grammar', ['rules'])
 
+
+class Grammar(GrammarBase):
     def serialize(self):
         return {
             "rules": [r.serialize() for r in self.rules]
@@ -14,12 +15,10 @@ class Grammar(object):
         return json.dumps(self.serialize())
 
 
-class Rule(object):
-    def __init__(self, name, exported, definition):
-        self.name = name
-        self.exported = exported
-        self.definition = definition
+RuleBase = namedtuple('Rule', ['name', 'exported', 'definition'])
 
+
+class Rule(RuleBase):
     def serialize(self):
         return {
             "name": self.name,
@@ -28,10 +27,10 @@ class Rule(object):
         }
 
 
-class Sequence(object):
-    def __init__(self, children):
-        self.children = children
+SequenceBase = namedtuple('Sequence', ['children'])
 
+
+class Sequence(SequenceBase):
     def serialize(self):
         return {
             "type": "sequence",
@@ -39,10 +38,10 @@ class Sequence(object):
         }
 
 
-class Alternative(object):
-    def __init__(self, children):
-        self.children = children
+AlternativeBase = namedtuple('Alternative', ['children'])
 
+
+class Alternative(AlternativeBase):
     def serialize(self):
         return {
             "type": "alternative",
@@ -50,10 +49,10 @@ class Alternative(object):
         }
 
 
-class Repetition(object):
-    def __init__(self, child):
-        self.child = child
+RepetitionBase = namedtuple('Repetition', ['child'])
 
+
+class Repetition(RepetitionBase):
     def serialize(self):
         return {
             "type": "repetition",
@@ -61,10 +60,10 @@ class Repetition(object):
         }
 
 
-class Optional(object):
-    def __init__(self, child):
-        self.child = child
+OptionalBase = namedtuple('Optional', ['child'])
 
+
+class Optional(OptionalBase):
     def serialize(self):
         return {
             "type": "optional",
@@ -72,11 +71,10 @@ class Optional(object):
         }
 
 
-class Capture(object):
-    def __init__(self, name, child):
-        self.name = name
-        self.child = child
+CaptureBase = namedtuple('Capture', ['name', 'child'])
 
+
+class Capture(CaptureBase):
     def serialize(self):
         return {
             "type": "capture",
@@ -85,10 +83,10 @@ class Capture(object):
         }
 
 
-class Word(object):
-    def __init__(self, text):
-        self.text = text
+WordBase = namedtuple('Word', ['text'])
 
+
+class Word(WordBase):
     def serialize(self):
         return {
             "type": "word",
@@ -96,10 +94,10 @@ class Word(object):
         }
 
 
-class RuleRef(object):
-    def __init__(self, name):
-        self.name = name
+RuleRefBase = namedtuple('RuleRef', ['name'])
 
+
+class RuleRef(RuleRefBase):
     def serialize(self):
         return {
             "type": "rule_ref",
@@ -107,10 +105,10 @@ class RuleRef(object):
         }
 
 
-class List(object):
-    def __init__(self, name):
-        self.name = name
+ListBase = namedtuple('List', ['name'])
 
+
+class List(ListBase):
     def serialize(self):
         return {
             "type": "list",
@@ -118,21 +116,30 @@ class List(object):
         }
 
 
-class Dictation(object):
+DictationBase = namedtuple('Dictation', [])
+
+
+class Dictation(DictationBase):
     def serialize(self):
         return {
             "type": "dictation",
         }
 
 
-class DictationWord(object):
+DictationWordBase = namedtuple('DictationWord', [])
+
+
+class DictationWord(DictationWordBase):
     def serialize(self):
         return {
             "type": "dictation_word",
         }
 
 
-class SpellingLetter(object):
+SpellingLetterBase = namedtuple('SpellingLetter', [])
+
+
+class SpellingLetter(SpellingLetterBase):
     def serialize(self):
         return {
             "type": "spelling_letter",
@@ -148,4 +155,4 @@ if __name__ == '__main__':
                  Word("testing"),
                  Word("world"),
              ]))
-    ]).json())
+    ]))

@@ -166,7 +166,7 @@ def parse(s, **extras):
 
 
 def main():
-    print(parse('snake case ~dictation').serialize())
+    print(parse('snake case ~dictation'))
 
 
 if __name__ == '__main__':
