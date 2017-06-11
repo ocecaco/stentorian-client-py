@@ -166,7 +166,7 @@ def parse(s, **extras):
 
 
 def main():
-    print(parse('snake case ~dictation'))
+    print(parse('snake case [&b*] ~dictation &b', b=Word(text='hello')))
 
 
 if __name__ == '__main__':

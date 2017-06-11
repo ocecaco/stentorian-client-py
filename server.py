@@ -1,6 +1,17 @@
 import socket
 import json
+import elementparser
+from grammar import Grammar, Rule
 from collections import deque
+
+
+class RemoteError(Exception):
+    def __init__(self, code, message, data):
+        super().__init__(message)
+
+        self.code = code
+        self.message = message
+        self.data = data
 
 
 class LineProtocolClient(object):
@@ -80,7 +91,7 @@ class JsonRpcClient(object):
         else:
             return obj
 
-    def _perform_call(self, method, *args, **kwargs):
+    def request(self, method, *args, **kwargs):
         self.id_counter += 1
 
         assert(not args or not kwargs)
@@ -90,7 +101,7 @@ class JsonRpcClient(object):
         call = {
             "jsonrpc": "2.0",
             "method": method,
-            "params": args or kwargs,
+            "params": kwargs or args,
             "id": msg_id,
         }
 
@@ -99,13 +110,13 @@ class JsonRpcClient(object):
         self.transport.send(msg)
         response = self._wait_for_response(msg_id)
 
-        return response['result']
-
-    def __getattr__(self, name):
-        def caller(*args, **kwargs):
-            return self._perform_call(name, *args, **kwargs)
-
-        return caller
+        if 'result' in response:
+            return response['result']
+        else:
+            e = response['error']
+            raise RemoteError(code=e['code'],
+                              message=e['message'],
+                              data=e.get('data'))
 
     def _wait_for_notification(self):
         if not self.notifications:
@@ -117,10 +128,8 @@ class JsonRpcClient(object):
 
     def process_notification(self):
         n = self._wait_for_notification()
-        h = getattr(self.notification_handler, n['method'])
-        p = n['params']
 
-        h(*p)
+        self.notification_handler(n['method'], n['params'])
 
 
 def jsonrpc(host, port, notification_handler):
@@ -128,29 +137,20 @@ def jsonrpc(host, port, notification_handler):
                          notification_handler)
 
 
-def build_action(tree, callback):
-    child_actions = [build_action(c, callback) for c in tree['children']]
-    return callback(tree, child_actions)
-
-
-class NotificationHandler(object):
-    def grammar_notification(self, grammar_id, event):
-        if event['type'] == 'phrase_finish':
-            print(' '.join(event['words']))
-            print(event['parse'])
-
-    def engine_notification(self, engine_id, event):
-        pass
+def notification(method, params):
+    print(method)
+    print(params)
 
 
 def main():
-    with jsonrpc('127.0.0.1', 1337, NotificationHandler()) as c:
-        print(c.microphone_set_state('sleeping'))
-        print(c.microphone_get_state())
-        print(c.engine_register())
-        grammar = {'children': [{'type': 'word', 'text': 'my'}, {'type': 'word', 'text': 'grammar'}, {'type': 'word', 'text': 'press'}, {'child': {'child': {'children': [{'type': 'word', 'text': 'mint'}, {'type': 'word', 'text': 'soap'}], 'type': 'alternative'}, 'type': 'repetition'}, 'type': 'capture', 'name': 'keys'}], 'type': 'sequence'}
-        g = c.grammar_load({"rules": [{"name": "testing", "exported": True, "definition": grammar}]}, False)
-        print(c.grammar_rule_activate(g, 'testing'))
+    definition = elementparser.parse('my testing grammar #(d@~dictation)')
+    rule = Rule(name='testing', exported=True, definition=definition)
+    grammar = Grammar([])
+    print(grammar)
+
+    with jsonrpc('127.0.0.1', 1337, notification) as c:
+        g = c.request('grammar_load', grammar.serialize(), False)
+        c.request('grammar_rule_activate', g, 'testing')
 
         while True:
             c.process_notification()
