@@ -27,8 +27,7 @@ class GrammarControl(object):
 
 class ParseTree(object):
     def __init__(self, all_words, json):
-        self.capture_type = json['name']['type']
-        self.name = json['name']['name']
+        self.name = json['name']
         self._slice = json['slice']
         self._all_words = all_words
         self.children = [ParseTree(all_words, c) for c in json['children']]
@@ -40,7 +39,7 @@ class ParseTree(object):
 
     def child_by_name(self, name, ty=None):
         for i, c in enumerate(self.children):
-            if c.name == name and (ty is None or c.capture_type == ty):
+            if c.name == name:
                 return i, c
 
         return KeyError('child with name "{}" not found', name)

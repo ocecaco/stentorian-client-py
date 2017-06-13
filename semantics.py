@@ -1,30 +1,24 @@
 from collections import defaultdict
 
 
-class SemanticsTraversal(object):
+def _default_handler(node, child_values):
+    return child_values
+
+
+class GrammarSemantics(object):
     def __init__(self):
-        self.rules = {}
-        self.captures = defaultdict(dict)
+        self.rules = defaultdict(lambda: _default_handler)
 
-    def rule(self, name, value_func):
-        self.rules[name] = value_func
+    def handler(self, name, semantics):
+        if name.startswith('_'):
+            raise RuntimeError(('cannot add handler for capture name'
+                                ' that starts with an underscore'
+                                ' because name is not guaranteed to'
+                                ' be unique in the grammar'))
 
-    def capture(self, parent_rule, name, value_func):
-        self.captures[parent_rule][name] = value_func
+        self.rules[name] = semantics
 
-    def _default_handler(self, node, child_values):
-        return child_values
-
-    def evaluate(self, node, parent_rule=None):
-        new_parent = node.name if node.capture_type == 'rule' else parent_rule
-        child_values = [self.evaluate(c, new_parent) for c in node.children]
-
-        if node.capture_type == 'rule':
-            handler = self.rules.get(node.name, self._default_handler)
-            return handler(node, child_values)
-        elif node.capture_type == 'capture':
-            scope = self.captures.get(parent_rule, {})
-            handler = scope.get(node.name, self._default_handler)
-            return handler(node, child_values)
-        else:
-            raise RuntimeError('unknown capture type')
+    def evaluate(self, node):
+        child_values = [self.evaluate(c) for c in node.children]
+        handler = self.rules[node.name]
+        return handler(node, child_values)

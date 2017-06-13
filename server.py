@@ -1,7 +1,7 @@
 import elementparser
 from grammar import Grammar, Rule
 from engine import connect
-from semantics import SemanticsTraversal
+from semantics import GrammarSemantics
 
 
 def dictation(node, child_values):
@@ -18,9 +18,9 @@ def testing(node, child_values):
     return printer
 
 
-meaning = SemanticsTraversal()
-meaning.capture('testing', 'd', dictation)
-meaning.rule('testing', testing)
+meaning = GrammarSemantics()
+meaning.handler('d', dictation)
+meaning.handler('testing', testing)
 
 
 class NotificationCallback(object):
