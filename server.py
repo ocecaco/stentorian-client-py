@@ -1,6 +1,26 @@
 import elementparser
 from grammar import Grammar, Rule
 from engine import connect
+from semantics import SemanticsTraversal
+
+
+def dictation(node, child_values):
+    return ' '.join(node.words)
+
+
+def testing(node, child_values):
+    i, _ = node.child_by_name('d')
+    message = 'testing: ' + child_values[i]
+
+    def printer():
+        print(message)
+
+    return printer
+
+
+meaning = SemanticsTraversal()
+meaning.capture('testing', 'd', dictation)
+meaning.rule('testing', testing)
 
 
 class NotificationCallback(object):
@@ -12,7 +32,9 @@ class NotificationCallback(object):
 
     def phrase_finish(self, foreign, words, parse):
         if not foreign:
-            print(' '.join(parse.child_by_name('d').words))
+            v = meaning.evaluate(parse)
+            print('executing semantic action')
+            v()
         else:
             print('foreign: ' + ' '.join(words))
 
@@ -25,7 +47,7 @@ def main():
     n = NotificationCallback()
 
     with connect('127.0.0.1', 1337) as e:
-        g = e.grammar_load(grammar, True, n)
+        g = e.grammar_load(grammar, n)
         g.rule_activate('testing')
         e.process_notifications()
 

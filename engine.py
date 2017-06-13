@@ -39,11 +39,11 @@ class ParseTree(object):
         return self._all_words[start:stop]
 
     def child_by_name(self, name, ty=None):
-        for c in self.children:
+        for i, c in enumerate(self.children):
             if c.name == name and (ty is None or c.capture_type == ty):
-                return c
+                return i, c
 
-        return None
+        return KeyError('child with name "{}" not found', name)
 
 
 class Engine(object):
@@ -81,7 +81,7 @@ class Engine(object):
         handler = method_mapping[method]
         handler(object_id, event)
 
-    def grammar_load(self, grammar, foreign, callback):
+    def grammar_load(self, grammar, callback, foreign=False):
         g = self.client.request('grammar_load', grammar.serialize(), foreign)
         # TODO: unregister callback at the right time
         self.grammar_callbacks[g] = callback
