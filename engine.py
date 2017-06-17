@@ -27,6 +27,7 @@ class GrammarControl(object):
 
 class ParseTree(object):
     def __init__(self, all_words, json):
+        self.rule = json['rule']
         self.name = json['name']
         self._slice = json['slice']
         self._all_words = all_words

@@ -2,15 +2,11 @@ import elementparser
 from grammar import Grammar, Rule
 from engine import connect
 from semantics import GrammarSemantics
-
-
-def dictation(node, child_values):
-    return ' '.join(node.words)
+from convenience import ActionCallback, choice
 
 
 def testing(node, child_values):
-    i, _ = node.child_by_name('d')
-    message = 'testing: ' + child_values[i]
+    message = 'testing: ' + str(child_values[0])
 
     def printer():
         print(message)
@@ -18,33 +14,22 @@ def testing(node, child_values):
     return printer
 
 
-meaning = GrammarSemantics()
-meaning.handler('d', dictation)
-meaning.handler('testing', testing)
-
-
-class NotificationCallback(object):
-    def phrase_start(self):
-        print('start')
-
-    def phrase_recognition_failure(self):
-        print('failure')
-
-    def phrase_finish(self, foreign, words, parse):
-        if not foreign:
-            v = meaning.evaluate(parse)
-            print('executing semantic action')
-            v()
-        else:
-            print('foreign: ' + ' '.join(words))
-
-
 def main():
-    definition = elementparser.parse('my testing grammar #(d@~dictation)')
+    semantics = GrammarSemantics()
+
+    test_element = choice(semantics, {
+        "tablespoon": "a",
+        "lamp": "b",
+    })
+
+    definition = elementparser.parse('my testing grammar &a',
+                                     a=test_element)
+
     rule = Rule(name='testing', exported=True, definition=definition)
+
     grammar = Grammar([rule])
 
-    n = NotificationCallback()
+    n = ActionCallback(semantics)
 
     with connect('127.0.0.1', 1337) as e:
         g = e.grammar_load(grammar, n)

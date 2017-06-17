@@ -2,6 +2,9 @@ from collections import defaultdict
 
 
 def _default_handler(node, child_values):
+    if len(child_values) == 1:
+        return child_values[0]
+
     return child_values
 
 
