@@ -35,7 +35,7 @@ class Mapping(Capture):
 
 
 class Choice(Mapping):
-    def __init__(name, options, captures={}):
+    def __init__(self, name, options, captures={}):
         new_options = {k: (lambda n, c, v=v: v) for k, v in options.items()}
         super().__init__(name, new_options, captures)
 

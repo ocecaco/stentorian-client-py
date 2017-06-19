@@ -1,11 +1,13 @@
 from grammar import Grammar
 from engine import connect
-from convenience import ActionCallback, MappingRule
+from convenience import ActionCallback, MappingRule, Choice
 
 
 def testing(node, child_values):
+    fruit = child_values[0]
+
     def printer():
-        print('hello')
+        print(fruit)
 
     return printer
 
@@ -13,10 +15,17 @@ def testing(node, child_values):
 class TestingRule(MappingRule):
     name = 'testing'
     exported = True
+
     mapping = {
-        "my short testing rule": testing
+        "my short testing rule <foo>": testing
     }
-    captures = []
+
+    captures = [
+        Choice("foo", {
+            "apple": "a",
+            "banana": "b"
+        })
+    ]
 
 
 def main():
