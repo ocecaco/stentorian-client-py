@@ -45,6 +45,19 @@ class ParseTree(object):
 
         return KeyError('child with name "{}" not found', name)
 
+    def _pretty_lines(self, last):
+        yield "+-- " + self.name + " -> " + str(self.words)
+
+        indent = '|   ' if not last else '    '
+
+        for i, c in enumerate(self.children):
+            child_last = (i == len(self.children) - 1)
+            for line in c._pretty_lines(child_last):
+                yield indent + line
+
+    def pretty(self):
+        return '\n'.join(self._pretty_lines(True))
+
 
 class Engine(object):
     def __init__(self, client):

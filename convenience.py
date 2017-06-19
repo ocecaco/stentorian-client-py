@@ -1,5 +1,5 @@
 import elementparser
-from grammar import Capture, Alternative
+from grammar import Capture, Alternative, Optional, Rule
 
 
 class ActionCallback(object):
@@ -15,34 +15,53 @@ class ActionCallback(object):
     def phrase_finish(self, foreign, words, parse):
         if not foreign:
             v = self.semantics.evaluate(parse)
-            print(v)
+            v()
 
 
-capture_counter = 1
+class Mapping(Capture):
+    def __init__(self, name, options, captures={}):
+        branches = []
+        for i, (k, v) in enumerate(options.items()):
+            child = elementparser.parse(k, **captures)
+            branches.append(Capture('@{}_choice_{}@'.format(name, i),
+                                    child, v))
+
+        element = Alternative(branches)
+
+        def handler(node, child_values):
+            return child_values[0]
+
+        super().__init__(name, element, handler)
 
 
-def new_capture_name():
-    global capture_counter
-    name = '@@capture{}'.format(capture_counter)
-    capture_counter += 1
-    return name
+class Choice(Mapping):
+    def __init__(name, options, captures={}):
+        new_options = {k: (lambda n, c, v=v: v) for k, v in options.items()}
+        super().__init__(name, new_options, captures)
 
 
-def choice(semantics, options):
-    new_options = {k: (lambda n, c, v=v: v) for k, v in options.items()}
-    return mapping(semantics, new_options)
+class Flag(Capture):
+    def __init__(self, name, element):
+        def handler(node, child_values):
+            if len(node.words) == 0:
+                return False
+
+            return True
+
+        super().__init__(name, Optional(element), handler)
 
 
-def action(semantics, element, handler):
-    name = new_capture_name()
-    semantics.handler(name, handler)
-    return Capture(name, element)
+class MappingRule(Rule):
+    def __init__(self, name=None, exported=None, mapping=None, captures=None):
+        if name is None:
+            name = self.name
+        if exported is None:
+            exported = self.exported
+        if mapping is None:
+            mapping = self.mapping
+        if captures is None:
+            captures = self.captures
 
-
-def mapping(semantics, options):
-    branches = []
-    for k, v in options.items():
-        child = elementparser.parse(k)
-        branches.append(action(semantics, child, v))
-
-    return Alternative(branches)
+        captures = {c.capture_name: c for c in captures}
+        definition = Mapping(name, mapping, captures)
+        super().__init__(name, exported, definition)

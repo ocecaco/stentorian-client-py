@@ -1,5 +1,5 @@
 from grammar import (Alternative, Sequence, Repetition,
-                     Optional, Word, Capture, List, RuleRef,
+                     Optional, Word, Capture, List,
                      Dictation, DictationWord, SpellingLetter)
 
 
@@ -59,7 +59,7 @@ class GrammarParser(object):
     def _sequence(self):
         children = []
         children.append(self._mayberepetition())
-        sequence_start = set(['[', '<', '{', '#', '(', '`', '&', '~'])
+        sequence_start = set(['[', '<', '{', '#', '(', '`', '~'])
         t = self._peek()
         while t is not None and (t in sequence_start or t.isalnum()):
             children.append(self._mayberepetition())
@@ -74,7 +74,7 @@ class GrammarParser(object):
         child = self._atom()
         if self._peek() == '*':
             self._token('*')
-            return Repetition(child)
+            return Repetition([child])
         else:
             return child
 
@@ -93,8 +93,6 @@ class GrammarParser(object):
             a = self._alternative()
             self._token(')')
             return a
-        elif t == '&':
-            return self._splice()
         elif t == '~':
             return self._special()
         else:
@@ -110,22 +108,17 @@ class GrammarParser(object):
         }
         return rules[w]
 
-    def _splice(self):
-        self._token('&')
-        w = self._word()
-        return self._extras[w]
-
     def _optional(self):
         self._token('[')
         child = self._alternative()
         self._token(']')
-        return Optional(child)
+        return Optional([child])
 
     def _ruleref(self):
         self._token('<')
         w = self._word()
         self._token('>')
-        return RuleRef(w)
+        return self._extras[w]
 
     def _list(self):
         self._token('{')
@@ -140,7 +133,7 @@ class GrammarParser(object):
         self._token('@')
         child = self._alternative()
         self._token(')')
-        return Capture(name, child)
+        return Capture(name, [child])
 
     def _word(self):
         t = self._peek()
@@ -166,7 +159,7 @@ def parse(s, **extras):
 
 
 def main():
-    print(parse('snake case [&b*] ~dictation &b', b=Word(text='hello')))
+    print(parse('snake case [<b>*] #(a@~dictation) <b>', b=Word(text='hello')).serialize())
 
 
 if __name__ == '__main__':

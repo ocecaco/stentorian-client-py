@@ -1,35 +1,29 @@
-import elementparser
-from grammar import Grammar, Rule
+from grammar import Grammar
 from engine import connect
-from semantics import GrammarSemantics
-from convenience import ActionCallback, choice
+from convenience import ActionCallback, MappingRule
 
 
 def testing(node, child_values):
-    message = 'testing: ' + str(child_values[0])
-
     def printer():
-        print(message)
+        print('hello')
 
     return printer
 
 
+class TestingRule(MappingRule):
+    name = 'testing'
+    exported = True
+    mapping = {
+        "my short testing rule": testing
+    }
+    captures = []
+
+
 def main():
-    semantics = GrammarSemantics()
-
-    test_element = choice(semantics, {
-        "tablespoon": "a",
-        "lamp": "b",
-    })
-
-    definition = elementparser.parse('my testing grammar &a',
-                                     a=test_element)
-
-    rule = Rule(name='testing', exported=True, definition=definition)
-
-    grammar = Grammar([rule])
-
-    n = ActionCallback(semantics)
+    rules = []
+    rules.append(TestingRule())
+    grammar = Grammar(rules)
+    n = ActionCallback(grammar.semantics)
 
     with connect('127.0.0.1', 1337) as e:
         g = e.grammar_load(grammar, n)
