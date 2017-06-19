@@ -17,7 +17,7 @@ class TestingRule(MappingRule):
     exported = True
 
     mapping = {
-        "my short testing rule <foo>": testing
+        "my short testing rule {mylist} <foo>": testing
     }
 
     captures = [
@@ -26,6 +26,14 @@ class TestingRule(MappingRule):
             "banana": "b"
         })
     ]
+
+
+class EngineCallback(object):
+    def paused(self):
+        print('paused')
+
+    def microphone_state_changed(self, state):
+        print(state)
 
 
 def main():
@@ -37,6 +45,10 @@ def main():
     with connect('127.0.0.1', 1337) as e:
         g = e.grammar_load(grammar, n)
         g.rule_activate('testing')
+        g.list_append('mylist', 'chromium')
+        e.microphone_set_state('sleeping')
+
+        r = e.register(EngineCallback())
         e.process_notifications()
 
 

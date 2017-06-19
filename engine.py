@@ -17,12 +17,60 @@ def connect(host, port):
 
 
 class GrammarControl(object):
-    def __init__(self, grammar_id, client):
+    def __init__(self, grammar_id, engine):
         self.grammar_id = grammar_id
-        self.client = client
+        self.client = engine.client
+        self.engine = engine
+
+    def __del__(self):
+        try:
+            self.unload()
+        except OSError:
+            pass
 
     def rule_activate(self, name):
         self.client.request('grammar_rule_activate', self.grammar_id, name)
+
+    def rule_deactivate(self, name):
+        self.client.request('grammar_rule_deactivate', self.grammar_id, name)
+
+    def list_append(self, name, word):
+        self.client.request('grammar_list_append', self.grammar_id, name, word)
+
+    def list_remove(self, name, word):
+        self.client.request('grammar_list_remove', self.grammar_id, name, word)
+
+    def list_clear(self, name):
+        self.client.request('grammar_list_clear', self.grammar_id, name)
+
+    def unload(self):
+        if self.grammar_id is None:
+            return
+
+        self.engine._unregister_grammar_callback(self.grammar_id)
+        self.client.request('grammar_unload', self.grammar_id)
+        self.grammar_id = None
+
+
+class EngineRegistration(object):
+    def __init__(self, engine_id, engine):
+        self.engine_id = engine_id
+        self.client = engine.client
+        self.engine = engine
+
+    def __del__(self):
+        try:
+            self.unregister()
+        except OSError:
+            pass
+
+    def unregister(self):
+        if self.engine_id is None:
+            return
+
+        self.engine._unregister_engine_callback(self.engine_id)
+        self.client.request('engine_unregister', self.engine_id)
+        self.engine_id = None
 
 
 class ParseTree(object):
@@ -83,7 +131,14 @@ class Engine(object):
             handler.phrase_finish(foreign, words, tree)
 
     def _engine_notification(self, engine_id, event):
-        pass
+        handler = self.engine_callbacks[engine_id]
+
+        t = event['type']
+        if t == 'paused':
+            handler.paused()
+        elif t == 'microphone_state_changed':
+            state = event['state']
+            handler.microphone_state_changed(state)
 
     def _receive_notification(self, method, params):
         object_id, event = params
@@ -94,11 +149,27 @@ class Engine(object):
         handler = method_mapping[method]
         handler(object_id, event)
 
+    def register(self, callback):
+        e = self.client.request('engine_register')
+        self.engine_callbacks[e] = callback
+        return EngineRegistration(e, self)
+
+    def _unregister_engine_callback(self, engine_id):
+        del self.engine_callbacks[engine_id]
+
     def grammar_load(self, grammar, callback, foreign=False):
         g = self.client.request('grammar_load', grammar.serialize(), foreign)
-        # TODO: unregister callback at the right time
         self.grammar_callbacks[g] = callback
-        return GrammarControl(g, self.client)
+        return GrammarControl(g, self)
+
+    def _unregister_grammar_callback(self, grammar_id):
+        del self.grammar_callbacks[grammar_id]
+
+    def microphone_set_state(self, state):
+        self.client.request('microphone_set_state', state)
+
+    def microphone_get_state(self):
+        return self.client.request('microphone_get_state')
 
     def process_notifications(self):
         self.client.process_notifications()
