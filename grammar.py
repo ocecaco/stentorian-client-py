@@ -25,7 +25,7 @@ def collect_rule_dependencies(rules):
             # the children of this node
             to_be_processed.append((True, current))
 
-            for d in current.referenced_rules():
+            for d in set(current.referenced_rules()):
                 if d in parents:
                     raise RuntimeError('cycle in grammar rules')
 
@@ -53,6 +53,9 @@ class Grammar(object):
 
         return serialized
 
+    def pretty(self):
+        return '\n'.join(r.pretty() for r in self.rules)
+
 
 class Rule(object):
     def __init__(self, name, exported, definition):
@@ -72,6 +75,10 @@ class Rule(object):
 
     def capture_handlers(self):
         yield from self.definition.capture_handlers()
+
+    def pretty(self):
+        exp = ' (exported)' if self.exported else ''
+        return self.name + exp + ' -> ' + self.definition.pretty(0) + ' ;'
 
 
 class Element(object):
@@ -97,6 +104,14 @@ class Sequence(Element):
             "children": [c.serialize() for c in self.children]
         }
 
+    def pretty(self, parent_prec):
+        prec = 2
+        result = ' '.join(c.pretty(prec) for c in self.children)
+        if parent_prec >= prec:
+            result = '(' + result + ')'
+
+        return result
+
 
 class Alternative(Element):
     def __init__(self, children):
@@ -107,6 +122,14 @@ class Alternative(Element):
             "type": "alternative",
             "children": [c.serialize() for c in self.children]
         }
+
+    def pretty(self, parent_prec):
+        prec = 1
+        result = ' | '.join(c.pretty(prec) for c in self.children)
+        if parent_prec >= prec:
+            result = '(' + result + ')'
+
+        return result
 
 
 class Repetition(Element):
@@ -119,6 +142,14 @@ class Repetition(Element):
             "child": self.children[0].serialize()
         }
 
+    def pretty(self, parent_prec):
+        prec = 3
+        result = self.children[0].pretty() + '+'
+        if parent_prec >= prec:
+            result = '(' + result + ')'
+
+        return result
+
 
 class Optional(Element):
     def __init__(self, child):
@@ -129,6 +160,9 @@ class Optional(Element):
             "type": "optional",
             "child": self.children[0].serialize()
         }
+
+    def pretty(self, parent_prec):
+        return '[' + self.children[0].pretty(0) + ']'
 
 
 class Capture(Element):
@@ -150,9 +184,8 @@ class Capture(Element):
 
         yield from super().capture_handlers()
 
-    @property
-    def capture_name(self):
-        return self.name
+    def pretty(self, parent_prec):
+        return self.children[0].pretty(parent_prec)
 
 
 class Word(Element):
@@ -165,6 +198,9 @@ class Word(Element):
             "type": "word",
             "text": self.text
         }
+
+    def pretty(self, parent_prec):
+        return self.text
 
 
 class RuleRef(Element):
@@ -181,6 +217,9 @@ class RuleRef(Element):
     def referenced_rules(self):
         yield self.rule
 
+    def pretty(self, parent_prec):
+        return '&' + self.rule.name
+
 
 class List(Element):
     def __init__(self, name):
@@ -193,6 +232,9 @@ class List(Element):
             "name": self.name
         }
 
+    def pretty(self, parent_prec):
+        return '{' + self.name + '}'
+
 
 class Dictation(Element):
     def __init__(self):
@@ -202,6 +244,9 @@ class Dictation(Element):
         return {
             "type": "dictation",
         }
+
+    def pretty(self, parent_prec):
+        return '~dictation'
 
 
 class DictationWord(Element):
@@ -213,6 +258,9 @@ class DictationWord(Element):
             "type": "dictation_word",
         }
 
+    def pretty(self, parent_prec):
+        return '~word'
+
 
 class SpellingLetter(Element):
     def __init__(self):
@@ -222,6 +270,9 @@ class SpellingLetter(Element):
         return {
             "type": "spelling_letter",
         }
+
+    def pretty(self, parent_prec):
+        return '~letter'
 
 
 if __name__ == '__main__':

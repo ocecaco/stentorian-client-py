@@ -74,7 +74,7 @@ class GrammarParser(object):
         child = self._atom()
         if self._peek() == '*':
             self._token('*')
-            return Repetition([child])
+            return Repetition(child)
         else:
             return child
 
@@ -112,7 +112,7 @@ class GrammarParser(object):
         self._token('[')
         child = self._alternative()
         self._token(']')
-        return Optional([child])
+        return Optional(child)
 
     def _ruleref(self):
         self._token('<')
@@ -133,7 +133,7 @@ class GrammarParser(object):
         self._token('@')
         child = self._alternative()
         self._token(')')
-        return Capture(name, [child])
+        return Capture(name, child)
 
     def _word(self):
         t = self._peek()

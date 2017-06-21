@@ -14,35 +14,35 @@ class ActionCallback(object):
 
     def phrase_finish(self, foreign, words, parse):
         if not foreign:
-            v = self.semantics.evaluate(parse)
-            v()
+            self.semantics.annotate_values(parse)
+            print(parse.value)
 
 
 class Mapping(Capture):
-    def __init__(self, name, options, captures={}):
+    def __init__(self, name, options, extras={}):
         branches = []
         for i, (k, v) in enumerate(options.items()):
-            child = elementparser.parse(k, **captures)
+            child = elementparser.parse(k, **extras)
             branches.append(Capture('@{}_choice_{}@'.format(name, i),
                                     child, v))
 
         element = Alternative(branches)
 
-        def handler(node, child_values):
-            return child_values[0]
+        def handler(node):
+            return node.children[0].value
 
         super().__init__(name, element, handler)
 
 
 class Choice(Mapping):
-    def __init__(self, name, options, captures={}):
-        new_options = {k: (lambda n, c, v=v: v) for k, v in options.items()}
-        super().__init__(name, new_options, captures)
+    def __init__(self, name, options, extras={}):
+        new_options = {k: (lambda n, v=v: v) for k, v in options.items()}
+        super().__init__(name, new_options, extras)
 
 
 class Flag(Capture):
     def __init__(self, name, element):
-        def handler(node, child_values):
+        def handler(node):
             if len(node.words) == 0:
                 return False
 
@@ -52,16 +52,15 @@ class Flag(Capture):
 
 
 class MappingRule(Rule):
-    def __init__(self, name=None, exported=None, mapping=None, captures=None):
+    def __init__(self, name=None, exported=None, mapping=None, extras=None):
         if name is None:
             name = self.name
         if exported is None:
             exported = self.exported
         if mapping is None:
             mapping = self.mapping
-        if captures is None:
-            captures = self.captures
+        if extras is None:
+            extras = self.extras
 
-        captures = {c.capture_name: c for c in captures}
-        definition = Mapping(name, mapping, captures)
+        definition = Mapping(name, mapping, extras)
         super().__init__(name, exported, definition)

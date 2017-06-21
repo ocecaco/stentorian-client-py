@@ -86,12 +86,12 @@ class ParseTree(object):
         start, stop = self._slice
         return self._all_words[start:stop]
 
-    def child_by_name(self, name, ty=None):
-        for i, c in enumerate(self.children):
+    def child_by_name(self, name):
+        for c in self.children:
             if c.name == name:
-                return i, c
+                return c
 
-        return KeyError('child with name "{}" not found', name)
+        return None
 
     def _pretty_lines(self, last):
         yield "+-- " + self.name + " -> " + str(self.words)
