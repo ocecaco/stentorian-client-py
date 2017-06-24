@@ -1,4 +1,5 @@
 import elementparser
+from collections import defaultdict
 from grammar import Capture, Alternative, Optional, Rule
 
 
@@ -18,49 +19,60 @@ class ActionCallback(object):
             print(parse.value)
 
 
-class Mapping(Capture):
-    def __init__(self, name, options, extras={}):
-        branches = []
-        for i, (k, v) in enumerate(options.items()):
-            child = elementparser.parse(k, **extras)
-            branches.append(Capture('@{}_choice_{}@'.format(name, i),
-                                    child, v))
+def mapping(name, options):
+    branches = []
+    for i, (child_element, child_handler) in enumerate(options):
+        branches.append(Capture('@{}_choice_{}@'.format(name, i),
+                                child_element, child_handler))
 
-        element = Alternative(branches)
+    element = Alternative(branches)
 
-        def handler(node):
-            return node.children[0].value
+    def handler(node):
+        return node.children[0].value
 
-        super().__init__(name, element, handler)
+    return Capture(name, element, handler)
 
 
-class Choice(Mapping):
-    def __init__(self, name, options, extras={}):
-        new_options = {k: (lambda n, v=v: v) for k, v in options.items()}
-        super().__init__(name, new_options, extras)
+def choice(name, options):
+    new_options = [(elementparser.parse(k), (lambda n, v=v: v))
+                   for k, v in options.items()]
+
+    return mapping(name, new_options)
 
 
-class Flag(Capture):
-    def __init__(self, name, element):
-        def handler(node):
-            if len(node.words) == 0:
-                return False
+def flag(name, element):
+    def handler(node):
+        if len(node.words) == 0:
+            return False
 
-            return True
+        return True
 
-        super().__init__(name, Optional(element), handler)
+    return Capture(name, Optional(element), handler)
 
 
-class MappingRule(Rule):
-    def __init__(self, name=None, exported=None, mapping=None, extras=None):
-        if name is None:
-            name = self.name
-        if exported is None:
-            exported = self.exported
-        if mapping is None:
-            mapping = self.mapping
-        if extras is None:
-            extras = self.extras
+class MappingBuilder(object):
+    def __init__(self, name):
+        self.name = name
+        self.options = []
 
-        definition = Mapping(name, mapping, extras)
-        super().__init__(name, exported, definition)
+    def choice(self, spec, *captures):
+        def wrap(f):
+            extras = {c.capture_name: c for c in captures}
+            element = elementparser.parse(spec, **extras)
+
+            def handler(node):
+                child_values = defaultdict(lambda: [])
+
+                for child in node.children:
+                    child_values[child.name].append(child)
+
+                return f(node, **child_values)
+
+            self.options.append((element, handler))
+
+            return f
+
+        return wrap
+
+    def build(self):
+        return mapping(self.name, self.options)

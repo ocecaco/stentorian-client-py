@@ -1,6 +1,7 @@
-from grammar import Grammar, Rule, Sequence, Word, RuleRef
+from grammar import Grammar, Rule, Sequence, Word, RuleRef, Capture
 from engine import connect
-from convenience import ActionCallback, MappingRule, Choice
+from convenience import ActionCallback, MappingBuilder, choice
+from definitions import special_map, letter_map, format_list
 
 
 numbers_1_9 = {
@@ -40,42 +41,183 @@ numbers_multiple_10 = {
 }
 
 
-def create_number_rule(name):
-    nsmall_rule = Rule('@{}_rule_nsmall@'.format(name), False,
-                       Choice("nsmall", numbers_1_9))
+def create_nsmall():
+    return choice("nsmall", numbers_1_9).extract_rule()
 
-    def nten(node):
-        return node.children[0].value
 
-    def nprefix(node):
-        return sum(c.value for c in node.children)
+def create_number(nsmall):
+    number = MappingBuilder('number')
 
-    def nsmall(node):
-        return node.children[0].value
+    nten = choice("nten", numbers_10_19)
+    nprefix = choice("nprefix", numbers_multiple_10)
 
-    mapping = {
-        "<nten>": nten,
-        "<nprefix> [<nsmall>]": nprefix,
-        "<nsmall>": nsmall,
-    }
+    @number.choice("<nten>", nten)
+    def nten_handler(node, nten):
+        return nten[0].value
 
-    extras = {
-        "nten": Choice("nten", numbers_10_19),
-        "nprefix": Choice("nprefix", numbers_multiple_10),
-        "nsmall": RuleRef(nsmall_rule)
-    }
+    @number.choice("<nprefix> [<nsmall>]", nprefix, nsmall)
+    def nprefix_handler(node, nprefix, nsmall=None):
+        small = 0 if nsmall is None else nsmall[0].value
+        return nprefix[0].value + small
 
-    return MappingRule(name, False, mapping, extras)
+    @number.choice("<nsmall>", nsmall)
+    def nsmall_handler(node, nsmall):
+        return nsmall[0].value
+
+    return number.build().extract_rule()
+
+
+def create_printable(nsmall):
+    builder = MappingBuilder('printable')
+
+    special = choice('special', special_map)
+    letter = choice('letter', letter_map)
+    pair = choice('pair', {
+        "angle": "<>",
+        "brax": "[]",
+        "curly": "{}",
+        "prekris": "()",
+    })
+    side = choice('side', {
+        "left": 0,
+        "right": 1,
+    })
+
+    @builder.choice("<side> <pair>", pair, side)
+    def pair_handler(node, side, pair):
+        characters = pair[0].value
+        idx = side[0].value
+        return characters[idx]
+
+    @builder.choice("<special>", special)
+    def special_handler(node, special):
+        return special[0].value
+
+    @builder.choice("#(b@[big]) <letter>", letter)
+    def letter_handler(node, b, letter):
+        result = letter[0].value
+
+        if len(b[0].words) != 0:
+            return result.upper()
+
+        return result
+
+    @builder.choice("(num|numb) <nsmall>", nsmall)
+    def digit_handler(node, nsmall):
+        return str(nsmall[0].value)
+
+    return builder.build().extract_rule()
+
+
+# matching = {
+#     "angle": "<>",
+#     "brax": "[]",
+#     "curly": "{}",
+#     "prekris": "()",
+#     "quotes": '""',
+#     "backticks": "``",
+#     "thin quotes": "''",
+# }
+
+# functional = {
+#     "ace": "space",
+#     "shock": "enter",
+#     "tabby": "tab",
+#     "deli": "delete",
+#     "clear": "backspace",
+# }
+
+
+# builder = MappingBuilder('genericedit')
+
+
+# @builder.choice("<direction> (Wally|[<n>])")
+# def arrows(node):
+#     pass
+
+
+# @builder.choice("page (up|down) [<n>]")
+# def pages(node):
+#     pass
+
+
+# @builder.choice("<functional> [<n>]")
+# def functional(node):
+#     pass
+
+
+# @builder.choice("escape")
+# def escape(node):
+#     pass
+
+
+# @builder.choice("shackle")
+# def shackle(node):
+#     pass
+
+
+# @builder.choice("stoosh")
+# def stoosh(node):
+#     pass
+
+
+# @builder.choice("spark")
+# def spark(node):
+#     pass
+
+
+# @builder.choice("#(k@hold|release) #(mod@control|shift|alt|win)")
+# def modifiers(node):
+#     pass
+
+
+# @builder.choice("release all")
+# def release(node):
+#     pass
+
+
+# @builder.choice("[press [#(c@control)] [#(s@shift)] [#(a@alt)] [#(w@win)]] <key>")
+# def press_key(node):
+#     pass
+
+
+# @builder.choice("<matching> [<n>]")
+# def matching(node):
+#     pass
+
+
+# @builder.choice("<format> ~dictation")
+# def format_text(node):
+#     pass
+
+
+# extras = # {
+#     "n": Capture("n", RuleRef(number_rule)),
+#     "functional": Choice("functional", functional),
+#     "matching": Choice("matching", matching),
+#     "format": Choice("format", {
+#         "say": lambda words: ' '.join(words)
+#     }),
+#     "direction": Choice("direction", {
+#         "lease": "left",
+#         "Ross": "right",
+#         "sauce": "up",
+#         "dunce": "down",
+#     }),
+#     "key": Choice("key", {
+#         "arch": "a"
+#     }),
+# }
 
 
 def main():
-    number_rule = create_number_rule('number')
+    digit_rule = create_nsmall()
+    printable_rule = create_printable(digit_rule)
     testing_rule = Rule('testing', True,
-                        Sequence([Word('mineral'),
-                                  RuleRef(number_rule)]))
+                        Sequence([Word('organization'),
+                                  printable_rule]))
 
-    rules = []
-    rules.append(testing_rule)
+    rules = [testing_rule]
     grammar = Grammar(rules)
     n = ActionCallback(grammar.semantics)
 

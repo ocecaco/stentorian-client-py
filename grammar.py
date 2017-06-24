@@ -187,6 +187,15 @@ class Capture(Element):
     def pretty(self, parent_prec):
         return self.children[0].pretty(parent_prec)
 
+    @property
+    def capture_name(self):
+        return self.name
+
+    def extract_rule(self):
+        rule = Rule(self.name, False, self.children[0])
+        new_child = RuleRef(rule)
+        return Capture(self.name, new_child, self.handler)
+
 
 class Word(Element):
     def __init__(self, text):
