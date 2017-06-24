@@ -41,11 +41,11 @@ numbers_multiple_10 = {
 }
 
 
-def create_nsmall():
+def element_nsmall():
     return choice("nsmall", numbers_1_9).extract_rule()
 
 
-def create_number(nsmall):
+def element_number(nsmall):
     number = MappingBuilder('number')
 
     nten = choice("nten", numbers_10_19)
@@ -67,11 +67,12 @@ def create_number(nsmall):
     return number.build().extract_rule()
 
 
-def create_printable(nsmall):
+def element_printable(nsmall):
     builder = MappingBuilder('printable')
 
     special = choice('special', special_map)
     letter = choice('letter', letter_map)
+    digit = nsmall.rename('digit')
     pair = choice('pair', {
         "angle": "<>",
         "brax": "[]",
@@ -102,120 +103,107 @@ def create_printable(nsmall):
 
         return result
 
-    @builder.choice("(num|numb) <nsmall>", nsmall)
-    def digit_handler(node, nsmall):
-        return str(nsmall[0].value)
+    @builder.choice("(num|numb) <digit>", digit)
+    def digit_handler(node, digit):
+        return str(digit[0].value)
 
     return builder.build().extract_rule()
 
 
-# matching = {
-#     "angle": "<>",
-#     "brax": "[]",
-#     "curly": "{}",
-#     "prekris": "()",
-#     "quotes": '""',
-#     "backticks": "``",
-#     "thin quotes": "''",
-# }
+def element_edit(number, printable):
+    builder = MappingBuilder('edit')
 
-# functional = {
-#     "ace": "space",
-#     "shock": "enter",
-#     "tabby": "tab",
-#     "deli": "delete",
-#     "clear": "backspace",
-# }
+    direction = choice("direction", {
+        "lease": "left",
+        "Ross": "right",
+        "sauce": "up",
+        "dunce": "down",
+    })
 
+    n = number.rename('n')
 
-# builder = MappingBuilder('genericedit')
+    functional = choice("functional", {
+        "ace": "space",
+        "shock": "enter",
+        "tabby": "tab",
+        "deli": "delete",
+        "clear": "backspace",
+    })
 
+    matching = choice("matching", {
+        "angle": "<>",
+        "brax": "[]",
+        "curly": "{}",
+        "prekris": "()",
+        "quotes": '""',
+        "backticks": "``",
+        "thin quotes": "''",
+    })
 
-# @builder.choice("<direction> (Wally|[<n>])")
-# def arrows(node):
-#     pass
+    formattype = choice("formattype", {
+        "say": None
+    })
 
+    @builder.choice("<direction> (#(w@Wally)|[<n>])", direction, n)
+    def arrows(node, direction, w=None, n=None):
+        pass
 
-# @builder.choice("page (up|down) [<n>]")
-# def pages(node):
-#     pass
+    @builder.choice("page #(d@up|down) [<n>]", n)
+    def pages(node, d, n=None):
+        pass
 
+    @builder.choice("<functional> [<n>]", functional, n)
+    def functional(node, functional, n=None):
+        pass
 
-# @builder.choice("<functional> [<n>]")
-# def functional(node):
-#     pass
+    @builder.choice("escape")
+    def escape(node):
+        pass
 
+    @builder.choice("shackle")
+    def shackle(node):
+        pass
 
-# @builder.choice("escape")
-# def escape(node):
-#     pass
+    @builder.choice("stoosh")
+    def stoosh(node):
+        pass
 
+    @builder.choice("spark")
+    def spark(node):
+        pass
 
-# @builder.choice("shackle")
-# def shackle(node):
-#     pass
+    @builder.choice("#(k@hold|release) #(mod@control|shift|alt|win)")
+    def modifiers(node, k, mod):
+        pass
 
+    @builder.choice("release all")
+    def release(node):
+        pass
 
-# @builder.choice("stoosh")
-# def stoosh(node):
-#     pass
+    @builder.choice("[press [#(c@control)] [#(s@shift)] [#(a@alt)] [#(w@win)]] <printable>",
+                    printable)
+    def press_key(node, printable, c=None, s=None, a=None, w=None):
+        pass
 
+    @builder.choice("<matching> [<n>]", matching, n)
+    def matching(node, matching, n=None):
+        pass
 
-# @builder.choice("spark")
-# def spark(node):
-#     pass
+    @builder.choice("<formattype> ~dictation", formattype)
+    def format_text(node, formattype):
+        pass
 
-
-# @builder.choice("#(k@hold|release) #(mod@control|shift|alt|win)")
-# def modifiers(node):
-#     pass
-
-
-# @builder.choice("release all")
-# def release(node):
-#     pass
-
-
-# @builder.choice("[press [#(c@control)] [#(s@shift)] [#(a@alt)] [#(w@win)]] <key>")
-# def press_key(node):
-#     pass
-
-
-# @builder.choice("<matching> [<n>]")
-# def matching(node):
-#     pass
-
-
-# @builder.choice("<format> ~dictation")
-# def format_text(node):
-#     pass
-
-
-# extras = # {
-#     "n": Capture("n", RuleRef(number_rule)),
-#     "functional": Choice("functional", functional),
-#     "matching": Choice("matching", matching),
-#     "format": Choice("format", {
-#         "say": lambda words: ' '.join(words)
-#     }),
-#     "direction": Choice("direction", {
-#         "lease": "left",
-#         "Ross": "right",
-#         "sauce": "up",
-#         "dunce": "down",
-#     }),
-#     "key": Choice("key", {
-#         "arch": "a"
-#     }),
-# }
+    return builder.build().extract_rule()
 
 
 def main():
-    digit_rule = create_nsmall()
-    printable_rule = create_printable(digit_rule)
+    nsmall = element_nsmall()
+    printable = element_printable(nsmall)
+    number = element_number(nsmall)
+    edit = element_edit(number, printable)
     testing_rule = Rule('testing', True,
                         Sequence([Word('organization'),
-                                  printable_rule]))
+                                  edit]))
 
     rules = [testing_rule]
     grammar = Grammar(rules)

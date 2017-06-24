@@ -196,6 +196,9 @@ class Capture(Element):
         new_child = RuleRef(rule)
         return Capture(self.name, new_child, self.handler)
 
+    def rename(self, new_name):
+        return Capture(new_name, self.children[0], self.handler)
+
 
 class Word(Element):
     def __init__(self, text):
