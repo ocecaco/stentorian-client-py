@@ -1,10 +1,27 @@
-from grammar import Grammar, Rule, Sequence, Word, RuleRef, Capture
+from grammar import Grammar, Rule, Sequence, Word, Repetition
 from engine import connect
-from convenience import ActionCallback, MappingBuilder, choice
+from convenience import ActionCallback, MappingBuilder, choice, flag, command_mapping, optional_default
 from definitions import special_map, letter_map, format_list
+from keyboard import keys, press_keys, type_string
+from formatting import clean, lowercase, connect_underscore, remove_characters, split_phrases
+import time
+
+
+class Action(object):
+    def __init__(self, steps):
+        self.steps = steps
+
+    def __add__(self, other):
+        combined_steps = self.steps + other.steps
+        return Action(combined_steps)
+
+    def __call__(self):
+        for s in self.steps:
+            s()
 
 
 numbers_1_9 = {
+    "zero": 0,
     "one": 1,
     "two": 2,
     "three": 3,
@@ -110,109 +127,155 @@ def element_printable(nsmall):
     return builder.build().extract_rule()
 
 
-def element_edit(number, printable):
-    builder = MappingBuilder('edit')
+def element_edit(nsmall, number, printable):
+    def handle_printable(node):
+        named = node.by_name
 
-    direction = choice("direction", {
-        "lease": "left",
-        "Ross": "right",
-        "sauce": "up",
-        "dunce": "down",
-    })
+        modifiers = {
+            'c': 'control',
+            's': 'shift',
+            'a': 'alt',
+            'w': 'win',
+        }
 
-    n = number.rename('n')
+        ordered = ['c', 's', 'a', 'w']
 
-    functional = choice("functional", {
-        "ace": "space",
-        "shock": "enter",
-        "tabby": "tab",
-        "deli": "delete",
-        "clear": "backspace",
-    })
+        used_modifiers = []
 
-    matching = choice("matching", {
-        "angle": "<>",
-        "brax": "[]",
-        "curly": "{}",
-        "prekris": "()",
-        "quotes": '""',
-        "backticks": "``",
-        "thin quotes": "''",
-    })
+        for k in ordered:
+            if k in named and named[k][0].value:
+                used_modifiers.append(modifiers[k])
 
-    formattype = choice("formattype", {
-        "say": None
-    })
+        def action():
+            for m in used_modifiers:
+                press_keys(m + ':down')
 
-    @builder.choice("<direction> (#(w@Wally)|[<n>])", direction, n)
-    def arrows(node, direction, w=None, n=None):
-        pass
+            if used_modifiers:
+                time.sleep(0.1)
 
-    @builder.choice("page #(d@up|down) [<n>]", n)
-    def pages(node, d, n=None):
-        pass
+            type_string(named['printable'][0].value)
 
-    @builder.choice("<functional> [<n>]", functional, n)
-    def functional(node, functional, n=None):
-        pass
+            for m in reversed(used_modifiers):
+                press_keys(m + ':up')
 
-    @builder.choice("escape")
-    def escape(node):
-        pass
+        return action
 
-    @builder.choice("shackle")
-    def shackle(node):
-        pass
+    def handle_dictation(node):
+        named = node.by_name
+        words = named['text'][0].words
 
-    @builder.choice("stoosh")
-    def stoosh(node):
-        pass
+        formatted = connect_underscore(
+            lowercase(
+                remove_characters(
+                    split_phrases(clean(words)))))
 
-    @builder.choice("spark")
-    def spark(node):
-        pass
+        def action():
+            for w in formatted:
+                type_string(w)
 
-    @builder.choice("#(k@hold|release) #(mod@control|shift|alt|win)")
-    def modifiers(node, k, mod):
-        pass
+        return action
 
-    @builder.choice("release all")
-    def release(node):
-        pass
+    def handle_numbers(node):
+        named = node.by_name
 
-    @builder.choice("[press [#(c@control)] [#(s@shift)] [#(a@alt)] [#(w@win)]] <printable>",
-                    printable)
-    def press_key(node, printable, c=None, s=None, a=None, w=None):
-        pass
+        digits = [str(d.value) for d in named['digit']]
 
-    @builder.choice("<matching> [<n>]", matching, n)
-    def matching(node, matching, n=None):
-        pass
+        def action():
+            for d in digits:
+                press_keys(d)
 
-    @builder.choice("<formattype> ~dictation", formattype)
-    def format_text(node, formattype):
-        pass
+        return action
 
-    return builder.build().extract_rule()
+    commands = {
+        "sauce <nopt>": keys('up:{nopt}'),
+        "dunce <nopt>": keys('down:{nopt}'),
+        "lease <nopt>": keys('left:{nopt}'),
+        "Ross <nopt>": keys('right:{nopt}'),
+
+        "page up <nopt>": keys('pageup:{nopt}'),
+        "page down <nopt>": keys('pagedown:{nopt}'),
+        "sauce <n> (page|pages)": keys('pageup:{n}'),
+        "dunce <n> (page|pages)": keys('pagedown:{n}'),
+        "lease <n> (word|words)": keys('c-left/3:{n}/10'),
+        "Ross <n> (word|words)": keys('c-right/3:{n}/10'),
+
+        "lease Wally": keys('home'),
+        "Ross Wally": keys('end'),
+        "sauce Wally": keys('c-home/3'),
+        "dunce Wally": keys('c-end/3'),
+
+        "ace <nopt>": keys('space:{nopt}'),
+        "shock <nopt>": keys('enter:{nopt}'),
+        "tabby <nopt>": keys('tab:{nopt}'),
+        "deli <nopt>": keys('del:{nopt}'),
+        "clear <nopt>": keys('backspace:{nopt}'),
+
+        "escape": keys('escape'),
+        "shackle": keys('c-a'),
+        "stoosh": keys('c-c'),
+        "spark": keys('c-j'),
+
+        "win key": keys('win/3'),
+
+        "hold alt": keys('alt:down/3'),
+        "release alt": keys('alt:up'),
+        "hold shift": keys('shift:down/3'),
+        "release shift": keys('shift:up'),
+        "hold control": keys('control:down/3'),
+        "release control": keys('control:up'),
+        "hold win": keys('win:down/3'),
+        "release win": keys('win:up'),
+        "release [all]": keys('alt:up, shift:up, control:up'),
+
+        "angle": keys("langle, rangle, left/3"),
+        "brax": keys("lbracket, rbracket, left/3"),
+        "curly": keys("lbrace, rbrace, left/3"),
+        "prekris": keys("lparen, rparen, left/3"),
+        "quotes": keys("dquote/3, dquote/3, left/3"),
+        "backticks": keys("backtick:2, left"),
+        "thin quotes": keys("squote, squote, left/3"),
+
+        "numbers <digit>* bow": handle_numbers,
+
+        "[press <c> <s> <a> <w>] <printable>": handle_printable,
+
+        "<formattype> #(text@~dictation)": handle_dictation,
+    }
+
+    captures = [
+        number.rename("n"),
+        nsmall.rename("digit"),
+        optional_default("nopt", number, 1),
+        printable.rename("printable"),
+        flag("c", "control"),
+        flag("s", "shift"),
+        flag("a", "alt"),
+        flag("w", "win|windows"),
+        choice("formattype", {
+            "say": "say",
+        }),
+    ]
+
+    return command_mapping('edit', commands, captures)
 
 
 def main():
     nsmall = element_nsmall()
     printable = element_printable(nsmall)
     number = element_number(nsmall)
-    edit = element_edit(number, printable)
+    edit = element_edit(nsmall, number, printable)
     testing_rule = Rule('testing', True,
                         Sequence([Word('organization'),
-                                  edit]))
+                                  Repetition(edit)]))
 
     rules = [testing_rule]
     grammar = Grammar(rules)
+    print(grammar.pretty())
     n = ActionCallback(grammar.semantics)
 
     with connect('192.168.2.224', 1337) as e:
         g = e.grammar_load(grammar, n)
         g.rule_activate('testing')
-        print(grammar.pretty())
         e.process_notifications()
 
 

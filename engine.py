@@ -1,5 +1,6 @@
 from protocol import LineProtocolClient, JsonRpcClient
 from contextlib import contextmanager
+from collections import defaultdict
 import socket
 
 
@@ -86,12 +87,14 @@ class ParseTree(object):
         start, stop = self._slice
         return self._all_words[start:stop]
 
-    def child_by_name(self, name):
-        for c in self.children:
-            if c.name == name:
-                return c
+    @property
+    def by_name(self):
+        child_values = defaultdict(lambda: [])
 
-        return None
+        for child in self.children:
+            child_values[child.name].append(child)
+
+        return child_values
 
     def _pretty_lines(self, last):
         yield "+-- " + self.name + " -> " + str(self.words)

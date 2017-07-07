@@ -34,9 +34,22 @@ def parse_keystroke(spec):
 
     modifiers = set(m['modifiers'].replace('-', ''))
     key = m['key']
-    inner = int(m.get('inner', '0'))
-    repeat = int(m.get('repeat', '1'))
-    outer = int(m.get('outer', '0'))
+
+    inner = m['inner']
+    if inner is None:
+        inner = '0'
+    inner = int(inner)
+
+    repeat = m['repeat']
+    if repeat is None:
+        repeat = '1'
+    repeat = int(repeat)
+
+    outer = m['outer']
+    if outer is None:
+        outer = '0'
+    outer = int(outer)
+
     direction = m['direction']
 
     return Keystroke(modifiers, key, inner, repeat, outer, direction)

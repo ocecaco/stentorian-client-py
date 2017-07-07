@@ -1,5 +1,4 @@
 import elementparser
-from collections import defaultdict
 from grammar import Capture, Alternative, Optional, Rule
 
 
@@ -16,7 +15,9 @@ class ActionCallback(object):
     def phrase_finish(self, foreign, words, parse):
         if not foreign:
             self.semantics.annotate_values(parse)
-            print(parse.value)
+            final_result = parse.value
+            for f in final_result:
+                f()
 
 
 def mapping(name, options):
@@ -40,14 +41,28 @@ def choice(name, options):
     return mapping(name, new_options)
 
 
-def flag(name, element):
+def flag(name, spec):
+    element = Optional(elementparser.parse(spec))
+
     def handler(node):
         if len(node.words) == 0:
             return False
 
         return True
 
-    return Capture(name, Optional(element), handler)
+    return Capture(name, element, handler)
+
+
+def optional_default(name, child, default_value):
+    element = Optional(child)
+
+    def handler(node):
+        if len(node.children) == 0:
+            return default_value
+
+        return node.children[0].value
+
+    return Capture(name, element, handler)
 
 
 class MappingBuilder(object):
@@ -58,15 +73,10 @@ class MappingBuilder(object):
     def choice(self, spec, *captures):
         def wrap(f):
             extras = {c.capture_name: c for c in captures}
-            element = elementparser.parse(spec, **extras)
+            element = elementparser.parse(spec, extras)
 
             def handler(node):
-                child_values = defaultdict(lambda: [])
-
-                for child in node.children:
-                    child_values[child.name].append(child)
-
-                return f(node, **child_values)
+                return f(node, **node.by_name)
 
             self.options.append((element, handler))
 
@@ -76,3 +86,13 @@ class MappingBuilder(object):
 
     def build(self):
         return mapping(self.name, self.options)
+
+
+def command_mapping(name, commands, captures):
+    options = []
+    for cmd, handler in commands.items():
+        extras = {c.capture_name: c for c in captures}
+        element = elementparser.parse(cmd, extras)
+        options.append((element, handler))
+
+    return mapping(name, options)

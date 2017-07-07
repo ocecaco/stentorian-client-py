@@ -4,7 +4,7 @@ from grammar import (Alternative, Sequence, Repetition,
 
 
 class GrammarParser(object):
-    def __init__(self, s, **extras):
+    def __init__(self, s, extras):
         self._s = s
         self._pos = 0
 
@@ -153,8 +153,10 @@ class GrammarParser(object):
             return ''.join(word)
 
 
-def parse(s, **extras):
-    p = GrammarParser(s, **extras)
+def parse(s, extras=None):
+    if extras is None:
+        extras = {}
+    p = GrammarParser(s, extras)
     return p.parse()
 
 

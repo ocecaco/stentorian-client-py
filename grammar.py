@@ -4,7 +4,7 @@ from semantics import GrammarSemantics
 def collect_rule_dependencies(rules):
     # performs a topological sort to collect rule dependencies in
     # the proper order
-    dependencies = set()
+    processed = set()
     parents = set()
 
     to_be_processed = [(False, r) for r in rules]
@@ -13,11 +13,14 @@ def collect_rule_dependencies(rules):
     while to_be_processed:
         is_parent, current = to_be_processed.pop()
 
+        if current in processed:
+            continue
+
         if is_parent:
             # we have processed all the children of this node
             parents.remove(current)
-            dependencies.add(current)
             result.append(current)
+            processed.add(current)
         else:
             parents.add(current)
 
@@ -29,7 +32,7 @@ def collect_rule_dependencies(rules):
                 if d in parents:
                     raise RuntimeError('cycle in grammar rules')
 
-                if d not in dependencies:
+                if d not in processed:
                     to_be_processed.append((False, d))
 
     return result
@@ -42,6 +45,10 @@ class Grammar(object):
         semantics = {}
         for r in self.rules:
             for name, handler in r.capture_handlers():
+                if (r.name, name) in semantics:
+                    assert semantics[(r.name, name)] is handler
+                    continue
+
                 semantics[(r.name, name)] = handler
 
         self.semantics = GrammarSemantics(semantics)
@@ -144,7 +151,7 @@ class Repetition(Element):
 
     def pretty(self, parent_prec):
         prec = 3
-        result = self.children[0].pretty() + '+'
+        result = self.children[0].pretty(prec) + '*'
         if parent_prec >= prec:
             result = '(' + result + ')'
 
