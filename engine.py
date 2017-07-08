@@ -75,12 +75,12 @@ class EngineRegistration(object):
 
 
 class ParseTree(object):
-    def __init__(self, all_words, json):
-        self.rule = json['rule']
-        self.name = json['name']
-        self._slice = json['slice']
+    def __init__(self, all_words, data):
+        self.rule = data['rule']
+        self.name = data['name']
+        self._slice = data['slice']
         self._all_words = all_words
-        self.children = [ParseTree(all_words, c) for c in json['children']]
+        self.children = [ParseTree(all_words, c) for c in data['children']]
 
     @property
     def words(self):

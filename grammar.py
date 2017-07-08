@@ -292,21 +292,3 @@ class SpellingLetter(Element):
 
     def pretty(self, parent_prec):
         return '~letter'
-
-
-if __name__ == '__main__':
-    r1 = Rule('135', False, definition=Word('hello'))
-    r2 = Rule('136', True, definition=RuleRef(r1))
-    r3 = Rule('137', True, definition=RuleRef(r2))
-    g = Grammar([r3])
-    print(g.serialize())
-
-    print(Grammar(rules=[
-        Rule(name='testing',
-             exported=True,
-             definition=Sequence([
-                 Word("hello"),
-                 Word("testing"),
-                 Word("world"),
-             ]))
-    ]))

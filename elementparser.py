@@ -158,11 +158,3 @@ def parse(s, extras=None):
         extras = {}
     p = GrammarParser(s, extras)
     return p.parse()
-
-
-def main():
-    print(parse('snake case [<b>*] #(a@~dictation) <b>', b=Word(text='hello')).serialize())
-
-
-if __name__ == '__main__':
-    main()
