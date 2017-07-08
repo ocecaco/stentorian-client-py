@@ -1,4 +1,4 @@
-from semantics import GrammarSemantics
+from .semantics import GrammarSemantics
 
 
 def collect_rule_dependencies(rules):

@@ -1,5 +1,5 @@
-import elementparser
-from grammar import Capture, Alternative, Optional
+from . import elementparser
+from .grammar import Capture, Alternative, Optional
 
 
 class ActionCallback(object):

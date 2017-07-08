@@ -1,4 +1,4 @@
-from protocol import LineProtocolClient, JsonRpcClient
+from .protocol import LineProtocolClient, JsonRpcClient
 from contextlib import contextmanager
 from collections import defaultdict
 import socket

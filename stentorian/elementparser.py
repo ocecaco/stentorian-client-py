@@ -1,6 +1,6 @@
-from grammar import (Alternative, Sequence, Repetition,
-                     Optional, Word, Capture, List,
-                     Dictation, DictationWord, SpellingLetter)
+from .grammar import (Alternative, Sequence, Repetition,
+                      Optional, Word, Capture, List,
+                      Dictation, DictationWord, SpellingLetter)
 
 
 class GrammarParser(object):
