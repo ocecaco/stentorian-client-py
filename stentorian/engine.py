@@ -2,38 +2,93 @@ from .protocol import LineProtocolClient, JsonRpcClient
 from contextlib import contextmanager
 from collections import defaultdict
 import socket
+import time
+import functools
+import logging
+
+
+logger = logging.getLogger(__name__)
+
+
+def retry(exc, delay, tries, logger):
+    def do_decorate(f):
+        @functools.wraps(f)
+        def wrapper(*args, **kwargs):
+            for _ in range(tries - 1):
+                start = time.time()
+                try:
+                    return f(*args, **kwargs)
+                except exc:
+                    elapsed = time.time() - start
+                    remaining = delay - elapsed
+                    if remaining > 0:
+                        time.sleep(remaining)
+                    logger.debug('call failed, retrying...', exc_info=True)
+
+            return f(*args, **kwargs)
+
+        return wrapper
+
+    return do_decorate
+
+
+@retry(OSError, delay=3, tries=100, logger=logger)
+def _connect_socket(host, port, timeout):
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        s.settimeout(timeout)
+        s.connect((host, port))
+        s.settimeout(None)
+        return s
+    except:
+        s.close()
+        raise
+
+
+def wait_for_user(engine):
+    while engine.get_current_user() is None:
+        logger.debug('get_current_user returned None, retrying...')
+        time.sleep(1)
 
 
 @contextmanager
 def connect(host, port):
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    logger.info('attempting to connect to server')
+    s = _connect_socket(host, port, timeout=2)
+    logger.info('successfully connected to server')
     try:
-        s.connect((host, port))
         proto = LineProtocolClient(s)
         client = JsonRpcClient(proto)
         engine = Engine(client)
+        logger.info('waiting for user profile to be selected')
+        wait_for_user(engine)
+        logger.info('user profile selected')
         yield engine
     finally:
+        s.shutdown(socket.SHUT_RDWR)
         s.close()
 
 
 class GrammarControl(object):
-    def __init__(self, grammar_id, engine):
+    def __init__(self, grammar_id, engine, rule_names):
         self.grammar_id = grammar_id
         self.client = engine.client
         self.engine = engine
-
-    def __del__(self):
-        try:
-            self.unload()
-        except OSError:
-            pass
+        self.rule_names = rule_names
 
     def rule_activate(self, name):
         self.client.request('grammar_rule_activate', self.grammar_id, name)
 
     def rule_deactivate(self, name):
         self.client.request('grammar_rule_deactivate', self.grammar_id, name)
+
+    def rule_activate_all(self):
+        for r in self.rule_names:
+            self.rule_activate(r)
+
+    def rule_deactivate_all(self):
+        for r in self.rule_names:
+            self.rule_deactivate(r)
 
     def list_append(self, name, word):
         self.client.request('grammar_list_append', self.grammar_id, name, word)
@@ -58,12 +113,6 @@ class EngineRegistration(object):
         self.engine_id = engine_id
         self.client = engine.client
         self.engine = engine
-
-    def __del__(self):
-        try:
-            self.unregister()
-        except OSError:
-            pass
 
     def unregister(self):
         if self.engine_id is None:
@@ -163,7 +212,8 @@ class Engine(object):
     def grammar_load(self, grammar, callback, foreign=False):
         g = self.client.request('grammar_load', grammar.serialize(), foreign)
         self.grammar_callbacks[g] = callback
-        return GrammarControl(g, self)
+        rule_names = [r.name for r in grammar.rules if r.exported]
+        return GrammarControl(g, self, rule_names)
 
     def _unregister_grammar_callback(self, grammar_id):
         del self.grammar_callbacks[grammar_id]
@@ -173,6 +223,9 @@ class Engine(object):
 
     def microphone_get_state(self):
         return self.client.request('microphone_get_state')
+
+    def get_current_user(self):
+        return self.client.request('get_current_user')
 
     def process_notifications(self):
         self.client.process_notifications()
