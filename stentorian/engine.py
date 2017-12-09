@@ -169,10 +169,13 @@ class Engine(object):
             foreign = event['foreign_grammar']
             words = event['words']
             parse = event['parse']
-            tree = ParseTree(words, parse) if not foreign else None
-            assert(tree.name == '__top')
-            assert(len(tree.children) == 1)
-            handler.phrase_finish(foreign, words, tree.children[0])
+            if not foreign:
+                tree = ParseTree(words, parse)
+                assert(tree.name == '__top')
+                assert(len(tree.children) == 1)
+                handler.phrase_finish(tree.children[0])
+            else:
+                handler.phrase_finish_foreign(words)
 
     def _engine_notification(self, engine_id, event):
         handler = self.engine_callbacks[engine_id]

@@ -12,11 +12,13 @@ class ActionCallback(object):
     def phrase_recognition_failure(self):
         pass
 
-    def phrase_finish(self, foreign, words, parse):
-        if not foreign:
-            extras = {}
-            result = self.grammar.value(parse, extras)
-            result()
+    def phrase_finish(self, parse):
+        extras = {}
+        result = self.grammar.value(parse, extras)
+        result()
+
+    def phrase_finish_foreign(self, words):
+        pass
 
 
 def mapping(commands, captures=None):
