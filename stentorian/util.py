@@ -1,5 +1,7 @@
-from . import elementparser
+import functools
+
 from .grammar import Alternative, Optional, Tag, Sequence
+from . import elementparser
 
 
 class ActionCallback(object):
@@ -21,24 +23,46 @@ class ActionCallback(object):
         pass
 
 
+def action(f):
+    @functools.wraps(f)
+    def handle(captures):
+        def execute():
+            f(captures)
+
+        return execute
+
+    return handle
+
+
+def command(spec, handler, captures=None):
+    if captures is None:
+        captures = {}
+
+    tagged = {k: Tag(element) for k, element in captures.items()}
+    return _command(spec, handler, tagged)
+
+
+def _command(spec, handler, tagged):
+    element = elementparser.parse(spec, tagged)
+
+    def new_handler(_parse, _child_value, extras, h=handler):
+        capture_values = {k: extras[t.name]
+                          for k, t in tagged.items()
+                          if t.name in extras}
+
+        return h(capture_values)
+
+    return element.map_full(new_handler)
+
+
 def mapping(commands, captures=None):
     if captures is None:
         captures = {}
 
     tagged = {k: Tag(element) for k, element in captures.items()}
 
-    alternatives = []
-    for spec, handler in commands.items():
-
-        def new_handler(parse, child_value, extras, h=handler):
-            capture_values = {k: extras[t.name]
-                              for k, t in tagged.items()
-                              if t.name in extras}
-
-            return h(capture_values)
-
-        child_element = elementparser.parse(spec, tagged)
-        alternatives.append(child_element.map_full(new_handler))
+    alternatives = [_command(spec, handler, tagged)
+                    for spec, handler in commands.items()]
 
     return Alternative(alternatives)
 

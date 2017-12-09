@@ -1,6 +1,6 @@
 from .grammar import (Alternative, Sequence, Repetition,
-                      Optional, Word, List,
-                      Dictation, DictationWord, SpellingLetter)
+                      Optional, Word, Dictation, DictationWord,
+                      SpellingLetter)
 
 
 class GrammarParser(object):
@@ -19,7 +19,7 @@ class GrammarParser(object):
 
     def _token(self, token):
         t = self._next()
-        assert(t == token)
+        assert t == token
 
     def _next(self, skip=True):
         t = self._peek(skip)
@@ -37,7 +37,7 @@ class GrammarParser(object):
         return self._s[self._pos]
 
     def _eof(self):
-        assert(self._pos == len(self._s))
+        assert self._pos == len(self._s)
 
     def _element(self):
         element = self._alternative()
@@ -53,8 +53,8 @@ class GrammarParser(object):
 
         if len(options) == 1:
             return options[0]
-        else:
-            return Alternative(options)
+
+        return Alternative(options)
 
     def _sequence(self):
         children = []
@@ -67,16 +67,16 @@ class GrammarParser(object):
 
         if len(children) == 1:
             return children[0]
-        else:
-            return Sequence(children)
+
+        return Sequence(children)
 
     def _mayberepetition(self):
         child = self._atom()
         if self._peek() == '*':
             self._token('*')
             return Repetition(child)
-        else:
-            return child
+
+        return child
 
     def _atom(self):
         t = self._peek()
@@ -91,8 +91,8 @@ class GrammarParser(object):
             return a
         elif t == '~':
             return self._special()
-        else:
-            return Word(self._word())
+
+        return Word(self._word())
 
     def _special(self):
         self._token('~')
@@ -118,6 +118,7 @@ class GrammarParser(object):
 
     def _word(self):
         t = self._peek()
+
         if t == '`':
             self._token('`')
             word = []
@@ -125,13 +126,13 @@ class GrammarParser(object):
                 word.append(self._next(skip=False))
             self._token('`')
             return ''.join(word)
-        else:
-            word = []
+
+        word = []
+        t = self._peek(skip=False)
+        while t is not None and t.isalnum():
+            word.append(self._next(skip=False))
             t = self._peek(skip=False)
-            while t is not None and t.isalnum():
-                word.append(self._next(skip=False))
-                t = self._peek(skip=False)
-            return ''.join(word)
+        return ''.join(word)
 
 
 def parse(s, extras=None):

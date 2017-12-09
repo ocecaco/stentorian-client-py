@@ -49,7 +49,7 @@ class JsonRpcClient(object):
         while obj is None:
             obj = self._get_message()
 
-        assert(msg_id == obj['id'])
+        assert msg_id == obj['id']
         return obj
 
     def _get_message(self):
@@ -60,13 +60,13 @@ class JsonRpcClient(object):
             # it's a notification
             self.notifications.append(obj)
             return None
-        else:
-            return obj
+
+        return obj
 
     def request(self, method, *args, **kwargs):
         self.id_counter += 1
 
-        assert(not args or not kwargs)
+        assert not args or not kwargs
 
         msg_id = self.id_counter
 
@@ -93,7 +93,7 @@ class JsonRpcClient(object):
     def _wait_for_notification(self):
         if not self.notifications:
             obj = self._get_message()
-            assert(obj is None)
+            assert obj is None
 
         n = self.notifications.popleft()
         return n
@@ -101,4 +101,4 @@ class JsonRpcClient(object):
     def process_notifications(self):
         while True:
             n = self._wait_for_notification()
-            self.notification_handler(n['method'], n['params'])
+            self.notification_handler(n['method'], n['params']) # pylint: disable=not-callable

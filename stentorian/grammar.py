@@ -145,9 +145,6 @@ class Map(Element):
 class Sequence(Element):
     TAG = 'seq'
 
-    def __init__(self, children):
-        super().__init__(children)
-
     def serialize(self):
         return wrap(self.TAG, {
             "type": "sequence",
@@ -171,9 +168,6 @@ class Sequence(Element):
 
 class Alternative(Element):
     TAG = 'alt'
-
-    def __init__(self, children):
-        super().__init__(children)
 
     def serialize(self):
         return {
@@ -237,36 +231,17 @@ class Optional(Element):
         })
 
     def value(self, parse, extras):
-        if len(parse.children) == 0:
+        if not parse.children:
             return self.default
 
         return self.children[0].value(parse.children[0], extras)
 
-    def pretty(self, parent_prec):
+    def pretty(self, _parent_prec):
         return '[' + self.children[0].pretty(0) + ']'
 
 
 def leaf_wrap(child):
     return wrap('leaf', child)
-
-
-class Word(Element):
-    def __init__(self, text):
-        super().__init__([])
-        self.text = text
-
-    def serialize(self):
-        return leaf_wrap({
-            "type": "word",
-            "text": self.text
-        })
-
-    def value(self, parse, extras):
-        assert(len(parse.words) == 1)
-        return parse.words[0]
-
-    def pretty(self, parent_prec):
-        return self.text
 
 
 class RuleRef(Element):
@@ -286,8 +261,27 @@ class RuleRef(Element):
     def referenced_rules(self):
         yield self.rule
 
-    def pretty(self, parent_prec):
+    def pretty(self, _parent_prec):
         return '&' + self.rule.name
+
+
+class Word(Element):
+    def __init__(self, text):
+        super().__init__([])
+        self.text = text
+
+    def serialize(self):
+        return leaf_wrap({
+            "type": "word",
+            "text": self.text
+        })
+
+    def value(self, parse, _extras):
+        assert len(parse.words) == 1
+        return parse.words[0]
+
+    def pretty(self, _parent_prec):
+        return self.text
 
 
 class List(Element):
@@ -304,11 +298,11 @@ class List(Element):
             "name": self.name
         })
 
-    def value(self, parse, extras):
-        assert(len(parse.words) == 1)
+    def value(self, parse, _extras):
+        assert len(parse.words) == 1
         return parse.words[0]
 
-    def pretty(self, parent_prec):
+    def pretty(self, _parent_prec):
         return '{' + self.name + '}'
 
 
@@ -321,10 +315,10 @@ class Dictation(Element):
             "type": "dictation",
         })
 
-    def value(self, parse, extras):
+    def value(self, parse, _extras):
         return parse.words
 
-    def pretty(self, parent_prec):
+    def pretty(self, _parent_prec):
         return '~dictation'
 
 
@@ -337,11 +331,11 @@ class DictationWord(Element):
             "type": "dictation_word",
         })
 
-    def value(self, parse, extras):
-        assert(len(parse.words) == 1)
+    def value(self, parse, _extras):
+        assert len(parse.words) == 1
         return parse.words[0]
 
-    def pretty(self, parent_prec):
+    def pretty(self, _parent_prec):
         return '~word'
 
 
@@ -354,9 +348,9 @@ class SpellingLetter(Element):
             "type": "spelling_letter",
         })
 
-    def value(self, parse, extras):
-        assert(len(parse.words) == 1)
+    def value(self, parse, _extras):
+        assert len(parse.words) == 1
         return parse.words[0]
 
-    def pretty(self, parent_prec):
+    def pretty(self, _parent_prec):
         return '~letter'

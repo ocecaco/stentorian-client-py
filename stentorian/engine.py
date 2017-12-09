@@ -1,16 +1,16 @@
-from .protocol import LineProtocolClient, JsonRpcClient
 from contextlib import contextmanager
-from collections import defaultdict
 import socket
 import time
 import functools
 import logging
 
+from .protocol import LineProtocolClient, JsonRpcClient
+
 
 logger = logging.getLogger(__name__)
 
 
-def retry(exc, delay, tries, logger):
+def retry(exc, delay, tries, log):
     def do_decorate(f):
         @functools.wraps(f)
         def wrapper(*args, **kwargs):
@@ -23,7 +23,7 @@ def retry(exc, delay, tries, logger):
                     remaining = delay - elapsed
                     if remaining > 0:
                         time.sleep(remaining)
-                    logger.debug('call failed, retrying...', exc_info=True)
+                    log.debug('call failed, retrying...', exc_info=True)
 
             return f(*args, **kwargs)
 
@@ -32,7 +32,7 @@ def retry(exc, delay, tries, logger):
     return do_decorate
 
 
-@retry(OSError, delay=3, tries=100, logger=logger)
+@retry(OSError, delay=3, tries=100, log=logger)
 def _connect_socket(host, port, timeout):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
@@ -103,7 +103,7 @@ class GrammarControl(object):
         if self.grammar_id is None:
             return
 
-        self.engine._unregister_grammar_callback(self.grammar_id)
+        self.engine._unregister_grammar_callback(self.grammar_id) # pylint: disable=protected-access
         self.client.request('grammar_unload', self.grammar_id)
         self.grammar_id = None
 
@@ -118,7 +118,7 @@ class EngineRegistration(object):
         if self.engine_id is None:
             return
 
-        self.engine._unregister_engine_callback(self.engine_id)
+        self.engine._unregister_engine_callback(self.engine_id) # pylint: disable=protected-access
         self.client.request('engine_unregister', self.engine_id)
         self.engine_id = None
 
@@ -142,7 +142,7 @@ class ParseTree(object):
 
         for i, c in enumerate(self.children):
             child_last = (i == len(self.children) - 1)
-            for line in c._pretty_lines(child_last):
+            for line in c._pretty_lines(child_last): # pylint: disable=protected-access
                 yield indent + line
 
     def pretty(self):
@@ -171,8 +171,8 @@ class Engine(object):
             parse = event['parse']
             if not foreign:
                 tree = ParseTree(words, parse)
-                assert(tree.name == '__top')
-                assert(len(tree.children) == 1)
+                assert tree.name == '__top'
+                assert len(tree.children) == 1
                 handler.phrase_finish(tree.children[0])
             else:
                 handler.phrase_finish_foreign(words)
