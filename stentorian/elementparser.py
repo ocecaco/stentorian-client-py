@@ -1,5 +1,5 @@
 from .grammar import (Alternative, Sequence, Repetition,
-                      Optional, Word, Capture, List,
+                      Optional, Word, List,
                       Dictation, DictationWord, SpellingLetter)
 
 
@@ -59,7 +59,7 @@ class GrammarParser(object):
     def _sequence(self):
         children = []
         children.append(self._mayberepetition())
-        sequence_start = set(['[', '<', '{', '#', '(', '`', '~'])
+        sequence_start = set(['[', '<', '(', '`', '~'])
         t = self._peek()
         while t is not None and (t in sequence_start or t.isalnum()):
             children.append(self._mayberepetition())
@@ -83,11 +83,7 @@ class GrammarParser(object):
         if t == '[':
             return self._optional()
         elif t == '<':
-            return self._ruleref()
-        elif t == '{':
-            return self._list()
-        elif t == '#':
-            return self._capture()
+            return self._extra()
         elif t == '(':
             self._token('(')
             a = self._alternative()
@@ -114,26 +110,11 @@ class GrammarParser(object):
         self._token(']')
         return Optional(child)
 
-    def _ruleref(self):
+    def _extra(self):
         self._token('<')
         w = self._word()
         self._token('>')
         return self._extras[w]
-
-    def _list(self):
-        self._token('{')
-        w = self._word()
-        self._token('}')
-        return List(w)
-
-    def _capture(self):
-        self._token('#')
-        self._token('(')
-        name = self._word()
-        self._token('@')
-        child = self._alternative()
-        self._token(')')
-        return Capture(name, child)
 
     def _word(self):
         t = self._peek()

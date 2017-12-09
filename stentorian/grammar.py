@@ -1,6 +1,3 @@
-from .semantics import GrammarSemantics
-
-
 def collect_rule_dependencies(rules):
     # performs a topological sort to collect rule dependencies in
     # the proper order
@@ -38,20 +35,18 @@ def collect_rule_dependencies(rules):
     return result
 
 
+def wrap(name, child):
+    return {
+        "type": "capture",
+        "name": name,
+        "child": child
+    }
+
+
 class Grammar(object):
     def __init__(self, rules):
         self.rules = collect_rule_dependencies(rules)
-
-        semantics = {}
-        for r in self.rules:
-            for name, handler in r.capture_handlers():
-                if (r.name, name) in semantics:
-                    assert semantics[(r.name, name)] is handler
-                    continue
-
-                semantics[(r.name, name)] = handler
-
-        self.semantics = GrammarSemantics(semantics)
+        self.rule_map = {r.name: r for r in self.rules}
 
     def serialize(self):
         serialized = {
@@ -60,13 +55,20 @@ class Grammar(object):
 
         return serialized
 
+    def value(self, parse, extras):
+        rule_name = parse.name
+        return self.rule_map[rule_name].value(parse, extras)
+
     def pretty(self):
         return '\n'.join(r.pretty() for r in self.rules)
 
 
 class Rule(object):
-    def __init__(self, name, exported, definition):
-        self.name = name
+    rule_counter = 0
+
+    def __init__(self, definition, exported):
+        self.name = 'rule_' + str(Rule.rule_counter)
+        Rule.rule_counter += 1
         self.exported = exported
         self.definition = definition
 
@@ -74,14 +76,14 @@ class Rule(object):
         return {
             "name": self.name,
             "exported": self.exported,
-            "definition": self.definition.serialize()
+            "definition": wrap(self.name, self.definition.serialize())
         }
+
+    def value(self, parse, extras):
+        return self.definition.value(parse.children[0], extras)
 
     def referenced_rules(self):
         yield from self.definition.referenced_rules()
-
-    def capture_handlers(self):
-        yield from self.definition.capture_handlers()
 
     def pretty(self):
         exp = ' (exported)' if self.exported else ''
@@ -92,24 +94,71 @@ class Element(object):
     def __init__(self, children):
         self.children = children
 
+    def map_value(self, handler):
+        return Map(lambda p, c, e: handler(c), self)
+
+    def map_full(self, handler):
+        return Map(handler, self)
+
     def referenced_rules(self):
         for c in self.children:
             yield from c.referenced_rules()
 
-    def capture_handlers(self):
-        for c in self.children:
-            yield from c.capture_handlers()
+
+class Tag(Element):
+    tag_counter = 0
+
+    def __init__(self, child):
+        super().__init__([child])
+        self.name = 'tag_' + str(Tag.tag_counter)
+        Tag.tag_counter += 1
+
+    def serialize(self):
+        return self.children[0].serialize()
+
+    def value(self, parse, extras):
+        child_value = self.children[0].value(parse, extras)
+        extras[self.name] = child_value
+        return child_value
+
+    def pretty(self, parent_prec):
+        return self.children[0].pretty(parent_prec)
+
+
+
+class Map(Element):
+    def __init__(self, handler, child):
+        super().__init__([child])
+        self.handler = handler
+
+    def serialize(self):
+        return self.children[0].serialize()
+
+    def value(self, parse, extras):
+        child_value = self.children[0].value(parse, extras)
+        return self.handler(parse, child_value, extras)
+
+    def pretty(self, parent_prec):
+        return self.children[0].pretty(parent_prec)
 
 
 class Sequence(Element):
+    TAG = 'seq'
+
     def __init__(self, children):
         super().__init__(children)
 
     def serialize(self):
-        return {
+        return wrap(self.TAG, {
             "type": "sequence",
             "children": [c.serialize() for c in self.children]
-        }
+        })
+
+    def value(self, parse, extras):
+        child_values = [c.value(c_parse, extras)
+                        for c, c_parse in zip(self.children, parse.children)]
+
+        return child_values
 
     def pretty(self, parent_prec):
         prec = 2
@@ -121,14 +170,23 @@ class Sequence(Element):
 
 
 class Alternative(Element):
+    TAG = 'alt'
+
     def __init__(self, children):
         super().__init__(children)
 
     def serialize(self):
         return {
             "type": "alternative",
-            "children": [c.serialize() for c in self.children]
+            "children": [wrap(self.TAG + str(i), c.serialize())
+                         for i, c in enumerate(self.children)]
         }
+
+    def value(self, parse, extras):
+        # get the index of the child that was matched
+        i = int(parse.name[len(self.TAG):])
+
+        return self.children[i].value(parse.children[0], extras)
 
     def pretty(self, parent_prec):
         prec = 1
@@ -140,14 +198,21 @@ class Alternative(Element):
 
 
 class Repetition(Element):
+    TAG = 'rep'
+
     def __init__(self, child):
         super().__init__([child])
 
     def serialize(self):
-        return {
+        return wrap(self.TAG, {
             "type": "repetition",
             "child": self.children[0].serialize()
-        }
+        })
+
+    def value(self, parse, extras):
+        child = self.children[0]
+        child_values = [child.value(c_parse, extras) for c_parse in parse.children]
+        return child_values
 
     def pretty(self, parent_prec):
         prec = 3
@@ -159,52 +224,30 @@ class Repetition(Element):
 
 
 class Optional(Element):
-    def __init__(self, child):
+    TAG = 'opt'
+
+    def __init__(self, child, default=None):
         super().__init__([child])
+        self.default = default
 
     def serialize(self):
-        return {
+        return wrap(self.TAG, {
             "type": "optional",
             "child": self.children[0].serialize()
-        }
+        })
+
+    def value(self, parse, extras):
+        if len(parse.children) == 0:
+            return self.default
+
+        return self.children[0].value(parse.children[0], extras)
 
     def pretty(self, parent_prec):
         return '[' + self.children[0].pretty(0) + ']'
 
 
-class Capture(Element):
-    def __init__(self, name, child, handler=None):
-        super().__init__([child])
-        self.name = name
-        self.handler = handler
-
-    def serialize(self):
-        return {
-            "type": "capture",
-            "name": self.name,
-            "child": self.children[0].serialize()
-        }
-
-    def capture_handlers(self):
-        if self.handler is not None:
-            yield self.name, self.handler
-
-        yield from super().capture_handlers()
-
-    def pretty(self, parent_prec):
-        return self.children[0].pretty(parent_prec)
-
-    @property
-    def capture_name(self):
-        return self.name
-
-    def extract_rule(self):
-        rule = Rule(self.name, False, self.children[0])
-        new_child = RuleRef(rule)
-        return Capture(self.name, new_child, self.handler)
-
-    def rename(self, new_name):
-        return Capture(new_name, self.children[0], self.handler)
+def leaf_wrap(child):
+    return wrap('leaf', child)
 
 
 class Word(Element):
@@ -213,10 +256,14 @@ class Word(Element):
         self.text = text
 
     def serialize(self):
-        return {
+        return leaf_wrap({
             "type": "word",
             "text": self.text
-        }
+        })
+
+    def value(self, parse, extras):
+        assert(len(parse.words) == 1)
+        return parse.words[0]
 
     def pretty(self, parent_prec):
         return self.text
@@ -233,6 +280,9 @@ class RuleRef(Element):
             "name": self.rule.name
         }
 
+    def value(self, parse, extras):
+        return self.rule.value(parse, extras)
+
     def referenced_rules(self):
         yield self.rule
 
@@ -241,15 +291,22 @@ class RuleRef(Element):
 
 
 class List(Element):
-    def __init__(self, name):
+    counter = 0
+
+    def __init__(self):
         super().__init__([])
-        self.name = name
+        self.name = 'list_' + str(List.counter)
+        List.counter += 1
 
     def serialize(self):
-        return {
+        return leaf_wrap({
             "type": "list",
             "name": self.name
-        }
+        })
+
+    def value(self, parse, extras):
+        assert(len(parse.words) == 1)
+        return parse.words[0]
 
     def pretty(self, parent_prec):
         return '{' + self.name + '}'
@@ -260,9 +317,12 @@ class Dictation(Element):
         super().__init__([])
 
     def serialize(self):
-        return {
+        return leaf_wrap({
             "type": "dictation",
-        }
+        })
+
+    def value(self, parse, extras):
+        return parse.words
 
     def pretty(self, parent_prec):
         return '~dictation'
@@ -273,9 +333,13 @@ class DictationWord(Element):
         super().__init__([])
 
     def serialize(self):
-        return {
+        return leaf_wrap({
             "type": "dictation_word",
-        }
+        })
+
+    def value(self, parse, extras):
+        assert(len(parse.words) == 1)
+        return parse.words[0]
 
     def pretty(self, parent_prec):
         return '~word'
@@ -286,9 +350,13 @@ class SpellingLetter(Element):
         super().__init__([])
 
     def serialize(self):
-        return {
+        return leaf_wrap({
             "type": "spelling_letter",
-        }
+        })
+
+    def value(self, parse, extras):
+        assert(len(parse.words) == 1)
+        return parse.words[0]
 
     def pretty(self, parent_prec):
         return '~letter'

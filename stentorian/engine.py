@@ -125,7 +125,6 @@ class EngineRegistration(object):
 
 class ParseTree(object):
     def __init__(self, all_words, data):
-        self.rule = data['rule']
         self.name = data['name']
         self._slice = data['slice']
         self._all_words = all_words
@@ -135,15 +134,6 @@ class ParseTree(object):
     def words(self):
         start, stop = self._slice
         return self._all_words[start:stop]
-
-    @property
-    def by_name(self):
-        child_values = defaultdict(lambda: [])
-
-        for child in self.children:
-            child_values[child.name].append(child)
-
-        return child_values
 
     def _pretty_lines(self, last):
         yield "+-- " + self.name + " -> " + str(self.words)
@@ -180,7 +170,9 @@ class Engine(object):
             words = event['words']
             parse = event['parse']
             tree = ParseTree(words, parse) if not foreign else None
-            handler.phrase_finish(foreign, words, tree)
+            assert(tree.name == '__top')
+            assert(len(tree.children) == 1)
+            handler.phrase_finish(foreign, words, tree.children[0])
 
     def _engine_notification(self, engine_id, event):
         handler = self.engine_callbacks[engine_id]

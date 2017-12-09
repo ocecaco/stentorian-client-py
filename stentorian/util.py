@@ -1,10 +1,10 @@
 from . import elementparser
-from .grammar import Capture, Alternative, Optional
+from .grammar import Alternative, Optional, Tag, Sequence
 
 
 class ActionCallback(object):
-    def __init__(self, semantics):
-        self.semantics = semantics
+    def __init__(self, grammar):
+        self.grammar = grammar
 
     def phrase_start(self):
         pass
@@ -14,85 +14,42 @@ class ActionCallback(object):
 
     def phrase_finish(self, foreign, words, parse):
         if not foreign:
-            self.semantics.annotate_values(parse)
-            final_result = parse.value
-            for f in final_result:
-                f()
+            extras = {}
+            result = self.grammar.value(parse, extras)
+            result()
 
 
-def mapping(name, options):
-    branches = []
-    for i, (child_element, child_handler) in enumerate(options):
-        branches.append(Capture('@{}_choice_{}@'.format(name, i),
-                                child_element, child_handler))
+def mapping(commands, captures=None):
+    if captures is None:
+        captures = {}
 
-    element = Alternative(branches)
+    tagged = {k: Tag(element) for k, element in captures.items()}
 
-    def handler(node):
-        return node.children[0].value
+    alternatives = []
+    for spec, handler in commands.items():
 
-    return Capture(name, element, handler)
+        def new_handler(parse, child_value, extras, h=handler):
+            capture_values = {k: extras[t.name]
+                              for k, t in tagged.items()
+                              if t.name in extras}
 
+            return h(capture_values)
 
-def choice(name, options):
-    new_options = [(elementparser.parse(k), (lambda n, v=v: v))
-                   for k, v in options.items()]
+        child_element = elementparser.parse(spec, tagged)
+        alternatives.append(child_element.map_full(new_handler))
 
-    return mapping(name, new_options)
-
-
-def flag(name, spec):
-    element = Optional(elementparser.parse(spec))
-
-    def handler(node):
-        if len(node.words) == 0:
-            return False
-
-        return True
-
-    return Capture(name, element, handler)
+    return Alternative(alternatives)
 
 
-def optional_default(name, child, default_value):
-    element = Optional(child)
-
-    def handler(node):
-        if len(node.children) == 0:
-            return default_value
-
-        return node.children[0].value
-
-    return Capture(name, element, handler)
+def choice(cs):
+    return mapping({k: lambda _e, v=v: v for k, v in cs.items()})
 
 
-class MappingBuilder(object):
-    def __init__(self, name):
-        self.name = name
-        self.options = []
-
-    def choice(self, spec, *captures):
-        def wrap(f):
-            extras = {c.capture_name: c for c in captures}
-            element = elementparser.parse(spec, extras)
-
-            def handler(node):
-                return f(node, **node.by_name)
-
-            self.options.append((element, handler))
-
-            return f
-
-        return wrap
-
-    def build(self):
-        return mapping(self.name, self.options)
+def flag(spec):
+    element = elementparser.parse(spec)
+    return Optional(element.map_value(lambda v: True), default=False)
 
 
-def command_mapping(name, commands, captures):
-    options = []
-    for cmd, handler in commands.items():
-        extras = {c.capture_name: c for c in captures}
-        element = elementparser.parse(cmd, extras)
-        options.append((element, handler))
-
-    return mapping(name, options)
+def prefix(spec, element):
+    prefix_element = elementparser.parse(spec)
+    return Sequence([prefix_element, element]).map_value(lambda vs: vs[1])
