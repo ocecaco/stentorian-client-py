@@ -69,7 +69,7 @@ def connect(host, port):
         s.close()
 
 
-class GrammarControl(object):
+class CommandGrammarControl(object):
     def __init__(self, grammar_id, engine, rule_names):
         self.grammar_id = grammar_id
         self.client = engine.client
@@ -77,31 +77,33 @@ class GrammarControl(object):
         self.rule_names = rule_names
 
     def rule_activate(self, rule):
-        self.client.request('grammar_rule_activate', self.grammar_id,
+        self.client.request('command_grammar_rule_activate', self.grammar_id,
                             rule.name)
 
     def rule_deactivate(self, rule):
-        self.client.request('grammar_rule_deactivate', self.grammar_id,
+        self.client.request('command_grammar_rule_deactivate', self.grammar_id,
                             rule.name)
 
     def rule_activate_all(self):
         for r in self.rule_names:
-            self.client.request('grammar_rule_activate', self.grammar_id, r)
+            self.client.request(
+                'command_grammar_rule_activate', self.grammar_id, r)
 
     def rule_deactivate_all(self):
         for r in self.rule_names:
-            self.client.request('grammar_rule_deactivate', self.grammar_id, r)
+            self.client.request(
+                'command_grammar_rule_deactivate', self.grammar_id, r)
 
     def list_append(self, grammar_list, word):
-        self.client.request('grammar_list_append', self.grammar_id,
+        self.client.request('command_grammar_list_append', self.grammar_id,
                             grammar_list.name, word)
 
     def list_remove(self, grammar_list, word):
-        self.client.request('grammar_list_remove', self.grammar_id,
+        self.client.request('command_grammar_list_remove', self.grammar_id,
                             grammar_list.name, word)
 
     def list_clear(self, grammar_list):
-        self.client.request('grammar_list_clear', self.grammar_id,
+        self.client.request('command_grammar_list_clear', self.grammar_id,
                             grammar_list.name)
 
     def unload(self):
@@ -110,7 +112,7 @@ class GrammarControl(object):
 
         self.engine._unregister_grammar_callback(
             self.grammar_id)  # pylint: disable=protected-access
-        self.client.request('grammar_unload', self.grammar_id)
+        self.client.request('command_grammar_unload', self.grammar_id)
         self.grammar_id = None
 
 
@@ -211,11 +213,11 @@ class Engine(object):
     def _unregister_engine_callback(self, engine_id):
         del self.engine_callbacks[engine_id]
 
-    def grammar_load(self, grammar, callback, foreign=False):
-        g = self.client.request('grammar_load', grammar.serialize(), foreign)
+    def grammar_load(self, grammar, callback):
+        g = self.client.request('command_grammar_load', grammar.serialize())
         self.grammar_callbacks[g] = callback
         rule_names = [r.name for r in grammar.rules if r.exported]
-        return GrammarControl(g, self, rule_names)
+        return CommandGrammarControl(g, self, rule_names)
 
     def _unregister_grammar_callback(self, grammar_id):
         del self.grammar_callbacks[grammar_id]
