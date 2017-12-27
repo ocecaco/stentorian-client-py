@@ -142,19 +142,6 @@ class ParseTree(object):
         start, stop = self._slice
         return self._all_words[start:stop]
 
-    def _pretty_lines(self, last):
-        yield "+-- " + self.name + " -> " + str(self.words)
-
-        indent = '|   ' if not last else '    '
-
-        for i, c in enumerate(self.children):
-            child_last = (i == len(self.children) - 1)
-            for line in c._pretty_lines(child_last):  # pylint: disable=protected-access
-                yield indent + line
-
-    def pretty(self):
-        return '\n'.join(self._pretty_lines(True))
-
 
 class Engine(object):
     def __init__(self, client):
@@ -173,16 +160,7 @@ class Engine(object):
         elif t == 'phrase_recognition_failure':
             handler.phrase_recognition_failure()
         elif t == 'phrase_finish':
-            foreign = event['foreign_grammar']
-            words = event['words']
-            parse = event['parse']
-            if not foreign:
-                tree = ParseTree(words, parse)
-                assert tree.name == '__top'
-                assert len(tree.children) == 1
-                handler.phrase_finish(tree.children[0])
-            else:
-                handler.phrase_finish_foreign(words)
+            handler.phrase_finish(event['result'])
 
     def _engine_notification(self, engine_id, event):
         handler = self.engine_callbacks[engine_id]
