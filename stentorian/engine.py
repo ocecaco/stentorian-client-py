@@ -70,19 +70,18 @@ def connect(host, port):
 
 
 class CommandGrammarControl(object):
-    def __init__(self, grammar_id, engine, rules):
+    def __init__(self, engine, grammar_id, rules):
         self.grammar_id = grammar_id
-        self.client = engine.client
         self.engine = engine
         self.rules = rules
 
     def rule_activate(self, rule):
-        self.client.request('command_grammar_rule_activate', self.grammar_id,
-                            rule.name)
+        self.engine._request('command_grammar_rule_activate',
+                             self.grammar_id, rule.name)
 
     def rule_deactivate(self, rule):
-        self.client.request('command_grammar_rule_deactivate', self.grammar_id,
-                            rule.name)
+        self.engine._request('command_grammar_rule_deactivate',
+                             self.grammar_id, rule.name)
 
     def rule_activate_all(self):
         for r in self.rules:
@@ -93,41 +92,95 @@ class CommandGrammarControl(object):
             self.rule_deactivate(r)
 
     def list_append(self, grammar_list, word):
-        self.client.request('command_grammar_list_append', self.grammar_id,
-                            grammar_list.name, word)
+        self.engine._request('command_grammar_list_append',
+                             self.grammar_id, grammar_list.name, word)
 
     def list_remove(self, grammar_list, word):
-        self.client.request('command_grammar_list_remove', self.grammar_id,
-                            grammar_list.name, word)
+        self.engine._request('command_grammar_list_remove',
+                             self.grammar_id, grammar_list.name, word)
 
     def list_clear(self, grammar_list):
-        self.client.request('command_grammar_list_clear', self.grammar_id,
-                            grammar_list.name)
+        self.engine._request('command_grammar_list_clear',
+                             self.grammar_id, grammar_list.name)
 
     def unload(self):
-        if self.grammar_id is None:
-            return
+        self.engine._command_grammar_unload(self.grammar_id)
 
-        self.engine._unregister_grammar_callback(
-            self.grammar_id)  # pylint: disable=protected-access
-        self.client.request('command_grammar_unload', self.grammar_id)
-        self.grammar_id = None
+
+class SelectGrammarControl(object):
+    def __init__(self, engine, grammar_id):
+        self.grammar_id = grammar_id
+        self.engine = engine
+
+    def activate(self):
+        self.engine._request('select_grammar_activate', self.grammar_id)
+
+    def deactivate(self):
+        self.engine._request('select_grammar_deactivate', self.grammar_id)
+
+    def text_set(self, text):
+        self.engine._request('select_grammar_text_set', self.grammar_id, text)
+
+    def text_get(self):
+        return self.engine._request('select_grammar_text_get', self.grammar_id)
+
+    def text_change(self, start, stop, text):
+        self.engine._request('select_grammar_text_change',
+                             self.grammar_id, start, stop, text)
+
+    def text_insert(self, start, text):
+        self.engine._request('select_grammar_text_insert',
+                             self.grammar_id, start, text)
+
+    def text_delete(self, start, stop):
+        self.engine._request('select_grammar_text_delete',
+                             self.grammar_id, start, stop)
+
+    def unload(self):
+        self.engine._select_grammar_unload(self.grammar_id)
+
+
+class DictationGrammarControl(object):
+    def __init__(self, engine, grammar_id):
+        self.grammar_id = grammar_id
+        self.engine = engine
+
+    def activate(self):
+        self.engine._request('dictation_grammar_activate', self.grammar_id)
+
+    def deactivate(self):
+        self.engine._request('dictation_grammar_deactivate', self.grammar_id)
+
+    def context(self, text):
+        self.engine._request(
+            'dictation_grammar_context_set', self.grammar_id, text)
+
+    def unload(self):
+        self.engine._dictation_grammar_unload(self.grammar_id)
+
+
+class CatchallGrammarControl(object):
+    def __init__(self, engine, grammar_id):
+        self.grammar_id = grammar_id
+        self.engine = engine
+
+    def activate(self):
+        self.engine._request('catchall_grammar_activate', self.grammar_id)
+
+    def deactivate(self):
+        self.engine._request('catchall_grammar_deactivate', self.grammar_id)
+
+    def unload(self):
+        self.engine._catchall_grammar_unload(self.grammar_id)
 
 
 class EngineRegistration(object):
     def __init__(self, engine_id, engine):
         self.engine_id = engine_id
-        self.client = engine.client
         self.engine = engine
 
     def unregister(self):
-        if self.engine_id is None:
-            return
-
-        self.engine._unregister_engine_callback(
-            self.engine_id)  # pylint: disable=protected-access
-        self.client.request('engine_unregister', self.engine_id)
-        self.engine_id = None
+        self.engine._engine_unregister(self.engine_id)
 
 
 class ParseTree(object):
@@ -143,60 +196,89 @@ class ParseTree(object):
         return self._all_words[start:stop]
 
 
+class CallbackManager(object):
+    def __init__(self):
+        self.callbacks = {}
+
+    def add_callback(self, entity_id, cb):
+        self.callbacks[entity_id] = cb
+
+    def remove_callback(self, entity_id):
+        del self.callbacks[entity_id]
+
+    def handle_callback(self, entity_id, event):
+        self.callbacks[entity_id](event)
+
+
 class Engine(object):
     def __init__(self, client):
         self.client = client
         self.client.notification_handler = self._receive_notification
 
-        self.grammar_callbacks = {}
-        self.engine_callbacks = {}
+        self.command_grammars = CallbackManager()
+        self.select_grammars = CallbackManager()
+        self.dictation_grammars = CallbackManager()
+        self.catchall_grammars = CallbackManager()
+        self.engine_registrations = CallbackManager()
 
-    def _grammar_notification(self, grammar_id, event):
-        handler = self.grammar_callbacks[grammar_id]
+        self.managers = {
+            "command_grammar_notification": self.command_grammars,
+            "select_grammar_notification": self.select_grammars,
+            "dictation_grammar_notification": self.dictation_grammars,
+            "catchall_grammar_notification": self.catchall_grammars,
+            "engine_notification": self.engine_registrations,
+        }
 
-        t = event['type']
-        if t == 'phrase_start':
-            handler.phrase_start()
-        elif t == 'phrase_recognition_failure':
-            handler.phrase_recognition_failure()
-        elif t == 'phrase_finish':
-            handler.phrase_finish(event['result'])
-
-    def _engine_notification(self, engine_id, event):
-        handler = self.engine_callbacks[engine_id]
-
-        t = event['type']
-        if t == 'paused':
-            handler.paused()
-        elif t == 'microphone_state_changed':
-            state = event['state']
-            handler.microphone_state_changed(state)
+    def _request(self, *args, **kwargs):
+        return self.client.request(*args, **kwargs)
 
     def _receive_notification(self, method, params):
-        object_id, event = params
-        method_mapping = {
-            'grammar_notification': self._grammar_notification,
-            'engine_notification': self._engine_notification,
-        }
-        handler = method_mapping[method]
-        handler(object_id, event)
+        cb_manager = self.managers[method]
+        entity_id, event = params
+        cb_manager.handle_callback(entity_id, event)
 
     def register(self, callback):
         e = self.client.request('engine_register')
-        self.engine_callbacks[e] = callback
-        return EngineRegistration(e, self)
+        self.engine_registrations.add_callback(e, callback)
+        return EngineRegistration(e, self.client, self.engine_registrations)
 
-    def _unregister_engine_callback(self, engine_id):
-        del self.engine_callbacks[engine_id]
-
-    def grammar_load(self, grammar, callback):
+    def command_grammar_load(self, grammar, callback):
         g = self.client.request('command_grammar_load', grammar.serialize())
-        self.grammar_callbacks[g] = callback
+        self.command_grammars.add_callback(g, callback)
         rule_names = [r for r in grammar.rules if r.exported]
-        return CommandGrammarControl(g, self, rule_names)
+        return CommandGrammarControl(self, g, rule_names)
 
-    def _unregister_grammar_callback(self, grammar_id):
-        del self.grammar_callbacks[grammar_id]
+    def _command_grammar_unload(self, grammar_id):
+        self.client.request('command_grammar_unload', grammar_id)
+        self.command_grammars.remove_callback(grammar_id)
+
+    def select_grammar_load(self, select_words, through_words, callback):
+        g = self.client.request('select_grammar_load',
+                                select_words, through_words)
+        self.select_grammars.add_callback(g, callback)
+        return SelectGrammarControl(self, g)
+
+    def _select_grammar_unload(self, grammar_id):
+        self.client.request('select_grammar_unload', grammar_id)
+        self.select_grammars.remove_callback(grammar_id)
+
+    def dictation_grammar_load(self, callback):
+        g = self.client.request('dictation_grammar_load')
+        self.dictation_grammars.add_callback(g, callback)
+        return DictationGrammarControl(self, g)
+
+    def _dictation_grammar_unload(self, grammar_id):
+        self.client.request('dictation_grammar_unload', grammar_id)
+        self.dictation_grammars.remove_callback(grammar_id)
+
+    def catchall_grammar_load(self, callback):
+        g = self.client.request('catchall_grammar_load')
+        self.catchall_grammar.add_callback(g, callback)
+        return CatchallGrammarControl(self, g)
+
+    def _catchall_grammar_unload(self, grammar_id):
+        self.client.request('catchall_grammar_unload', grammar_id)
+        self.catchall_grammars.remove_callback(grammar_id)
 
     def microphone_set_state(self, state):
         self.client.request('microphone_set_state', state)
