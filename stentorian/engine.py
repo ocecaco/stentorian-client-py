@@ -76,34 +76,40 @@ class GrammarControl(object):
         self.engine = engine
         self.rule_names = rule_names
 
-    def rule_activate(self, name):
-        self.client.request('grammar_rule_activate', self.grammar_id, name)
+    def rule_activate(self, rule):
+        self.client.request('grammar_rule_activate', self.grammar_id,
+                            rule.name)
 
-    def rule_deactivate(self, name):
-        self.client.request('grammar_rule_deactivate', self.grammar_id, name)
+    def rule_deactivate(self, rule):
+        self.client.request('grammar_rule_deactivate', self.grammar_id,
+                            rule.name)
 
     def rule_activate_all(self):
         for r in self.rule_names:
-            self.rule_activate(r)
+            self.client.request('grammar_rule_activate', self.grammar_id, r)
 
     def rule_deactivate_all(self):
         for r in self.rule_names:
-            self.rule_deactivate(r)
+            self.client.request('grammar_rule_deactivate', self.grammar_id, r)
 
-    def list_append(self, name, word):
-        self.client.request('grammar_list_append', self.grammar_id, name, word)
+    def list_append(self, grammar_list, word):
+        self.client.request('grammar_list_append', self.grammar_id,
+                            grammar_list.name, word)
 
-    def list_remove(self, name, word):
-        self.client.request('grammar_list_remove', self.grammar_id, name, word)
+    def list_remove(self, grammar_list, word):
+        self.client.request('grammar_list_remove', self.grammar_id,
+                            grammar_list.name, word)
 
-    def list_clear(self, name):
-        self.client.request('grammar_list_clear', self.grammar_id, name)
+    def list_clear(self, grammar_list):
+        self.client.request('grammar_list_clear', self.grammar_id,
+                            grammar_list.name)
 
     def unload(self):
         if self.grammar_id is None:
             return
 
-        self.engine._unregister_grammar_callback(self.grammar_id) # pylint: disable=protected-access
+        self.engine._unregister_grammar_callback(
+            self.grammar_id)  # pylint: disable=protected-access
         self.client.request('grammar_unload', self.grammar_id)
         self.grammar_id = None
 
@@ -118,7 +124,8 @@ class EngineRegistration(object):
         if self.engine_id is None:
             return
 
-        self.engine._unregister_engine_callback(self.engine_id) # pylint: disable=protected-access
+        self.engine._unregister_engine_callback(
+            self.engine_id)  # pylint: disable=protected-access
         self.client.request('engine_unregister', self.engine_id)
         self.engine_id = None
 
@@ -142,7 +149,7 @@ class ParseTree(object):
 
         for i, c in enumerate(self.children):
             child_last = (i == len(self.children) - 1)
-            for line in c._pretty_lines(child_last): # pylint: disable=protected-access
+            for line in c._pretty_lines(child_last):  # pylint: disable=protected-access
                 yield indent + line
 
     def pretty(self):
