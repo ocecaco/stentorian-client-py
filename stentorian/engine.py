@@ -70,11 +70,11 @@ def connect(host, port):
 
 
 class CommandGrammarControl(object):
-    def __init__(self, grammar_id, engine, rule_names):
+    def __init__(self, grammar_id, engine, rules):
         self.grammar_id = grammar_id
         self.client = engine.client
         self.engine = engine
-        self.rule_names = rule_names
+        self.rules = rules
 
     def rule_activate(self, rule):
         self.client.request('command_grammar_rule_activate', self.grammar_id,
@@ -85,14 +85,12 @@ class CommandGrammarControl(object):
                             rule.name)
 
     def rule_activate_all(self):
-        for r in self.rule_names:
-            self.client.request(
-                'command_grammar_rule_activate', self.grammar_id, r)
+        for r in self.rules:
+            self.rule_activate(r)
 
     def rule_deactivate_all(self):
-        for r in self.rule_names:
-            self.client.request(
-                'command_grammar_rule_deactivate', self.grammar_id, r)
+        for r in self.rules:
+            self.rule_deactivate(r)
 
     def list_append(self, grammar_list, word):
         self.client.request('command_grammar_list_append', self.grammar_id,
@@ -216,7 +214,7 @@ class Engine(object):
     def grammar_load(self, grammar, callback):
         g = self.client.request('command_grammar_load', grammar.serialize())
         self.grammar_callbacks[g] = callback
-        rule_names = [r.name for r in grammar.rules if r.exported]
+        rule_names = [r for r in grammar.rules if r.exported]
         return CommandGrammarControl(g, self, rule_names)
 
     def _unregister_grammar_callback(self, grammar_id):
