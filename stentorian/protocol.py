@@ -1,5 +1,20 @@
 import json
-from collections import deque
+import threading
+from queue import Queue
+
+
+class Promise(object):
+    def __init__(self):
+        self._value = None
+        self._event = threading.Event()
+
+    def resolve(self, value):
+        self._value = value
+        self._event.set()
+
+    def wait(self):
+        self._event.wait()
+        return self._value
 
 
 class RemoteError(Exception):
@@ -38,30 +53,38 @@ class LineProtocolClient(object):
 class JsonRpcClient(object):
     def __init__(self, transport):
         self.transport = transport
-        self.notification_handler = None
+        self.notifications = Queue()
 
-        self.notifications = deque()
+        self.lock = threading.Lock()
+        self.pending_calls = {}
         self.id_counter = 0
 
-    def _wait_for_response(self, msg_id):
-        # get the first message that isn't a notification
-        obj = None
-        while obj is None:
-            obj = self._get_message()
+        self.worker_thread = threading.Thread(
+            target=self._receive_worker, daemon=True)
+        self.worker_thread.start()
 
-        assert msg_id == obj['id']
-        return obj
+    def _receive_worker(self):
+        while True:
+            done = self._process_incoming()
+            if done:
+                return
 
-    def _get_message(self):
+    def _process_incoming(self):
         msg = self.transport.receive()
+        if msg is None:
+            return True
         obj = json.loads(msg)
 
         if 'id' not in obj:
             # it's a notification
-            self.notifications.append(obj)
-            return None
+            self.notifications.put((obj['method'], obj['params']))
+        else:
+            msg_id = obj['id']
 
-        return obj
+            with self.lock:
+                self.pending_calls.pop(msg_id).resolve(obj)
+
+        return False
 
     def request(self, method, *args, **kwargs):
         self.id_counter += 1
@@ -79,8 +102,14 @@ class JsonRpcClient(object):
 
         msg = json.dumps(call)
 
+        promise = Promise()
+
+        with self.lock:
+            self.pending_calls[msg_id] = promise
+
         self.transport.send(msg)
-        response = self._wait_for_response(msg_id)
+
+        response = promise.wait()
 
         if 'result' in response:
             return response['result']
@@ -90,15 +119,5 @@ class JsonRpcClient(object):
                               message=e['message'],
                               data=e.get('data'))
 
-    def _wait_for_notification(self):
-        if not self.notifications:
-            obj = self._get_message()
-            assert obj is None
-
-        n = self.notifications.popleft()
-        return n
-
-    def process_notifications(self):
-        while True:
-            n = self._wait_for_notification()
-            self.notification_handler(n['method'], n['params']) # pylint: disable=not-callable
+    def get_notification(self):
+        return self.notifications.get()

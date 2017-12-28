@@ -233,7 +233,6 @@ class GrammarCallback(object):
 class Engine(object):
     def __init__(self, client):
         self.client = client
-        self.client.notification_handler = self._receive_notification
 
         self.command_grammars = CallbackManager()
         self.select_grammars = CallbackManager()
@@ -251,11 +250,6 @@ class Engine(object):
 
     def _request(self, *args, **kwargs):
         return self.client.request(*args, **kwargs)
-
-    def _receive_notification(self, method, params):
-        cb_manager = self.managers[method]
-        entity_id, event = params
-        cb_manager.handle_callback(entity_id, event)
 
     def register(self, callback):
         e = self.client.request('engine_register')
@@ -319,4 +313,9 @@ class Engine(object):
         return self.client.request('get_current_user')
 
     def process_notifications(self):
-        self.client.process_notifications()
+        while True:
+            method, params = self.client.get_notification()
+
+            cb_manager = self.managers[method]
+            entity_id, event = params
+            cb_manager.handle_callback(entity_id, event)
