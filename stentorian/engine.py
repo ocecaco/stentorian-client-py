@@ -3,6 +3,7 @@ import socket
 import time
 import functools
 import logging
+import threading
 
 from .protocol import LineProtocolClient, JsonRpcClient
 
@@ -230,9 +231,20 @@ class GrammarCallback(object):
                 (self.transform)(event['result']))
 
 
+def synchronize(f):
+    @functools.wraps(f)
+    def with_lock(self, *args, **kwargs):
+        with self._synchronize_lock:
+            return f(self, *args, **kwargs)
+
+    return with_lock
+
+
 class Engine(object):
     def __init__(self, client):
         self.client = client
+
+        self._synchronize_lock = threading.Lock()
 
         self.command_grammars = CallbackManager()
         self.select_grammars = CallbackManager()
@@ -248,14 +260,17 @@ class Engine(object):
             "engine_notification": self.engine_registrations,
         }
 
+    @synchronize
     def _request(self, *args, **kwargs):
         return self.client.request(*args, **kwargs)
 
+    @synchronize
     def register(self, callback):
         e = self.client.request('engine_register')
         self.engine_registrations.add_callback(e, callback)
         return EngineRegistration(e, self.client, self.engine_registrations)
 
+    @synchronize
     def command_grammar_load(self, grammar, callback):
         g = self.client.request('command_grammar_load', grammar.serialize())
 
@@ -269,10 +284,12 @@ class Engine(object):
         rule_names = [r for r in grammar.rules if r.exported]
         return CommandGrammarControl(self, g, rule_names)
 
+    @synchronize
     def _command_grammar_unload(self, grammar_id):
         self.client.request('command_grammar_unload', grammar_id)
         self.command_grammars.remove_callback(grammar_id)
 
+    @synchronize
     def select_grammar_load(self, select_words, through_words, callback):
         g = self.client.request('select_grammar_load',
                                 select_words, through_words)
@@ -281,34 +298,42 @@ class Engine(object):
 
         return SelectGrammarControl(self, g)
 
+    @synchronize
     def _select_grammar_unload(self, grammar_id):
         self.client.request('select_grammar_unload', grammar_id)
         self.select_grammars.remove_callback(grammar_id)
 
+    @synchronize
     def dictation_grammar_load(self, callback):
         g = self.client.request('dictation_grammar_load')
         self.dictation_grammars.add_callback(g, GrammarCallback(callback))
         return DictationGrammarControl(self, g)
 
+    @synchronize
     def _dictation_grammar_unload(self, grammar_id):
         self.client.request('dictation_grammar_unload', grammar_id)
         self.dictation_grammars.remove_callback(grammar_id)
 
+    @synchronize
     def catchall_grammar_load(self, callback):
         g = self.client.request('catchall_grammar_load')
         self.catchall_grammar.add_callback(g, GrammarCallback(callback))
         return CatchallGrammarControl(self, g)
 
+    @synchronize
     def _catchall_grammar_unload(self, grammar_id):
         self.client.request('catchall_grammar_unload', grammar_id)
         self.catchall_grammars.remove_callback(grammar_id)
 
+    @synchronize
     def microphone_set_state(self, state):
         self.client.request('microphone_set_state', state)
 
+    @synchronize
     def microphone_get_state(self):
         return self.client.request('microphone_get_state')
 
+    @synchronize
     def get_current_user(self):
         return self.client.request('get_current_user')
 
