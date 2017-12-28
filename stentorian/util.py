@@ -19,9 +19,6 @@ class ActionCallback(object):
         result = self.grammar.value(parse, extras)
         result()
 
-    def phrase_finish_foreign(self, words):
-        pass
-
 
 def action(f):
     @functools.wraps(f)

@@ -193,7 +193,7 @@ class ParseTree(object):
     @property
     def words(self):
         start, stop = self._slice
-        return self._all_words[start:stop]
+        return [w['text'] for w in self._all_words[start:stop]]
 
 
 class CallbackManager(object):
@@ -208,6 +208,26 @@ class CallbackManager(object):
 
     def handle_callback(self, entity_id, event):
         self.callbacks[entity_id](event)
+
+
+class GrammarCallback(object):
+    def __init__(self, handler_object, transform=None):
+        self.handler_object = handler_object
+
+        def do_nothing(x):
+            return x
+
+        self.transform = transform if transform is not None else do_nothing
+
+    def __call__(self, event):
+        t = event['type']
+        if t == 'phrase_start':
+            self.handler_object.phrase_start()
+        elif t == 'phrase_recognition_failure':
+            self.handler_object.phrase_recognition_failure()
+        elif t == 'phrase_finish':
+            self.handler_object.phrase_finish(
+                (self.transform)(event['result']))
 
 
 class Engine(object):
@@ -244,7 +264,14 @@ class Engine(object):
 
     def command_grammar_load(self, grammar, callback):
         g = self.client.request('command_grammar_load', grammar.serialize())
-        self.command_grammars.add_callback(g, callback)
+
+        def make_parse_tree(event):
+            words, matches = event
+            return ParseTree(words, matches[0])
+
+        self.command_grammars.add_callback(
+            g, GrammarCallback(callback, transform=make_parse_tree))
+
         rule_names = [r for r in grammar.rules if r.exported]
         return CommandGrammarControl(self, g, rule_names)
 
@@ -255,7 +282,9 @@ class Engine(object):
     def select_grammar_load(self, select_words, through_words, callback):
         g = self.client.request('select_grammar_load',
                                 select_words, through_words)
-        self.select_grammars.add_callback(g, callback)
+
+        self.select_grammars.add_callback(g, GrammarCallback(callback))
+
         return SelectGrammarControl(self, g)
 
     def _select_grammar_unload(self, grammar_id):
@@ -264,7 +293,7 @@ class Engine(object):
 
     def dictation_grammar_load(self, callback):
         g = self.client.request('dictation_grammar_load')
-        self.dictation_grammars.add_callback(g, callback)
+        self.dictation_grammars.add_callback(g, GrammarCallback(callback))
         return DictationGrammarControl(self, g)
 
     def _dictation_grammar_unload(self, grammar_id):
@@ -273,7 +302,7 @@ class Engine(object):
 
     def catchall_grammar_load(self, callback):
         g = self.client.request('catchall_grammar_load')
-        self.catchall_grammar.add_callback(g, callback)
+        self.catchall_grammar.add_callback(g, GrammarCallback(callback))
         return CatchallGrammarControl(self, g)
 
     def _catchall_grammar_unload(self, grammar_id):
