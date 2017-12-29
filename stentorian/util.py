@@ -8,16 +8,23 @@ class ActionCallback(object):
     def __init__(self, grammar):
         self.grammar = grammar
 
-    def phrase_start(self):
+    def phrase_start(self, control):
         pass
 
-    def phrase_recognition_failure(self):
+    def phrase_recognition_failure(self, control):
         pass
 
-    def phrase_finish(self, parse):
-        extras = {}
+    def phrase_finish(self, control, parse):
+        extras = {'_control': control}
         result = self.grammar.value(parse, extras)
         result()
+
+
+def with_control(element):
+    def f(parse, child_value, extras):
+        return (extras['_control'], child_value)
+
+    return element.map_full(f)
 
 
 def action(f):

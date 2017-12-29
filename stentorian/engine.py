@@ -212,7 +212,8 @@ class CallbackManager(object):
 
 
 class GrammarCallback(object):
-    def __init__(self, handler_object, transform=None):
+    def __init__(self, control, handler_object, transform=None):
+        self.control = control
         self.handler_object = handler_object
 
         def do_nothing(x):
@@ -223,11 +224,12 @@ class GrammarCallback(object):
     def __call__(self, event):
         t = event['type']
         if t == 'phrase_start':
-            self.handler_object.phrase_start()
+            self.handler_object.phrase_start(self.control)
         elif t == 'phrase_recognition_failure':
-            self.handler_object.phrase_recognition_failure()
+            self.handler_object.phrase_recognition_failure(self.control)
         elif t == 'phrase_finish':
             self.handler_object.phrase_finish(
+                self.control,
                 (self.transform)(event['result']))
 
 
@@ -278,11 +280,13 @@ class Engine(object):
             words, matches = event
             return ParseTree(words, matches[0])
 
-        self.command_grammars.add_callback(
-            g, GrammarCallback(callback, transform=make_parse_tree))
-
         rule_names = [r for r in grammar.rules if r.exported]
-        return CommandGrammarControl(self, g, rule_names)
+        control = CommandGrammarControl(self, g, rule_names)
+
+        self.command_grammars.add_callback(
+            g, GrammarCallback(control, callback, transform=make_parse_tree))
+
+        return control
 
     @synchronize
     def _command_grammar_unload(self, grammar_id):
@@ -294,9 +298,12 @@ class Engine(object):
         g = self.client.request('select_grammar_load',
                                 select_words, through_words)
 
-        self.select_grammars.add_callback(g, GrammarCallback(callback))
+        control = SelectGrammarControl(self, g)
 
-        return SelectGrammarControl(self, g)
+        self.select_grammars.add_callback(
+            g, GrammarCallback(control, callback))
+
+        return control
 
     @synchronize
     def _select_grammar_unload(self, grammar_id):
@@ -306,8 +313,10 @@ class Engine(object):
     @synchronize
     def dictation_grammar_load(self, callback):
         g = self.client.request('dictation_grammar_load')
-        self.dictation_grammars.add_callback(g, GrammarCallback(callback))
-        return DictationGrammarControl(self, g)
+        control = DictationGrammarControl(self, g)
+        self.dictation_grammars.add_callback(
+            g, GrammarCallback(control, callback))
+        return control
 
     @synchronize
     def _dictation_grammar_unload(self, grammar_id):
@@ -317,8 +326,10 @@ class Engine(object):
     @synchronize
     def catchall_grammar_load(self, callback):
         g = self.client.request('catchall_grammar_load')
-        self.catchall_grammar.add_callback(g, GrammarCallback(callback))
-        return CatchallGrammarControl(self, g)
+        control = CatchallGrammarControl(self, g)
+        self.catchall_grammars.add_callback(
+            g, GrammarCallback(control, callback))
+        return control
 
     @synchronize
     def _catchall_grammar_unload(self, grammar_id):
