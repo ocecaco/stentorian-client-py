@@ -20,6 +20,20 @@ class ActionCallback(object):
         result()
 
 
+class SimpleCallback(object):
+    def __init__(self, function):
+        self.function = function
+
+    def phrase_start(self, control):
+        pass
+
+    def phrase_recognition_failure(self, control):
+        pass
+
+    def phrase_finish(self, control, result):
+        self.function(result)
+
+
 def with_control(element):
     def f(parse, child_value, extras):
         return (extras['_control'], child_value)
@@ -53,6 +67,9 @@ def _command(spec, handler, tagged):
         capture_values = {k: extras[t.name]
                           for k, t in tagged.items()
                           if t.name in extras}
+
+        for t in tagged.values():
+            extras.pop(t.name, None)
 
         return h(capture_values)
 
