@@ -52,22 +52,15 @@ def wait_for_user(engine):
         time.sleep(1)
 
 
-@contextmanager
 def connect(host, port):
     logger.info('attempting to connect to server')
     s = _connect_socket(host, port, timeout=2)
     logger.info('successfully connected to server')
-    try:
-        proto = LineProtocolClient(s)
-        client = JsonRpcClient(proto)
-        engine = Engine(client)
-        logger.info('waiting for user profile to be selected')
-        wait_for_user(engine)
-        logger.info('user profile selected')
-        yield engine
-    finally:
-        s.shutdown(socket.SHUT_RDWR)
-        s.close()
+    engine = Engine(s)
+    logger.info('waiting for user profile to be selected')
+    wait_for_user(engine)
+    logger.info('user profile selected')
+    return engine
 
 
 class CommandGrammarControl(object):
@@ -243,8 +236,11 @@ def synchronize(f):
 
 
 class Engine(object):
-    def __init__(self, client):
+    def __init__(self, s):
+        proto = LineProtocolClient(s)
+        client = JsonRpcClient(proto)
         self.client = client
+        self.sock = s
 
         self._synchronize_lock = threading.Lock()
 
@@ -261,6 +257,12 @@ class Engine(object):
             "catchall_grammar_notification": self.catchall_grammars,
             "engine_notification": self.engine_registrations,
         }
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, ty, value, tb):
+        self.sock.close()
 
     @synchronize
     def _request(self, *args, **kwargs):
