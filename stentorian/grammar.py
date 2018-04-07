@@ -59,6 +59,10 @@ class Grammar(object):
         rule_name = parse.name
         return self.rule_map[rule_name].value(parse, extras)
 
+    def on_load(self, control):
+        for r in self.rules:
+            r.on_load(control)
+
     def pretty(self):
         return '\n'.join(r.pretty() for r in self.rules)
 
@@ -85,6 +89,9 @@ class Rule(object):
     def referenced_rules(self):
         yield from self.definition.referenced_rules()
 
+    def on_load(self, control):
+        self.definition.on_load(control)
+
     def pretty(self):
         exp = ' (exported)' if self.exported else ''
         return self.name + exp + ' -> ' + self.definition.pretty(0) + ' ;'
@@ -103,6 +110,15 @@ class Element(object):
     def referenced_rules(self):
         for c in self.children:
             yield from c.referenced_rules()
+
+    def on_load(self, control):
+        pass
+
+    def _on_load_recursive(self, control):
+        self.on_load(control)
+
+        for c in self.children:
+            c._on_load_recursive(control)
 
 
 class Tag(Element):
@@ -123,7 +139,6 @@ class Tag(Element):
 
     def pretty(self, parent_prec):
         return self.children[0].pretty(parent_prec)
-
 
 
 class Map(Element):
@@ -287,9 +302,10 @@ class Word(Element):
 class List(Element):
     counter = 0
 
-    def __init__(self):
+    def __init__(self, initial=None):
         super().__init__([])
         self.name = 'list_' + str(List.counter)
+        self.initial = initial
         List.counter += 1
 
     def serialize(self):
@@ -301,6 +317,13 @@ class List(Element):
     def value(self, parse, _extras):
         assert len(parse.words) == 1
         return parse.words[0]
+
+    def on_load(self, control):
+        if not self.initial:
+            return
+
+        for word in self.initial:
+            control.list_add(self, word)
 
     def pretty(self, _parent_prec):
         return '{' + self.name + '}'
