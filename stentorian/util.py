@@ -15,8 +15,7 @@ class ActionCallback(object):
         pass
 
     def phrase_finish(self, control, parse):
-        extras = {'_control': control}
-        result = self.grammar.value(parse, extras)
+        result = self.grammar.value(parse, control, {})
         result()
 
 
@@ -32,13 +31,6 @@ class SimpleCallback(object):
 
     def phrase_finish(self, control, result):
         self.function(result)
-
-
-def with_control(element):
-    def f(parse, child_value, extras):
-        return (extras['_control'], child_value)
-
-    return element.map_full(f)
 
 
 def action(f):
@@ -63,7 +55,7 @@ def command(spec, handler, captures=None):
 def _command(spec, handler, tagged):
     element = elementparser.parse(spec, tagged)
 
-    def new_handler(_parse, _child_value, extras, h=handler):
+    def new_handler(_parse, _child_value, control, extras, h=handler):
         capture_values = {k: extras[t.name]
                           for k, t in tagged.items()
                           if t.name in extras}
@@ -71,7 +63,7 @@ def _command(spec, handler, tagged):
         for t in tagged.values():
             extras.pop(t.name, None)
 
-        return h(capture_values)
+        return h(capture_values, control)
 
     return element.map_full(new_handler)
 

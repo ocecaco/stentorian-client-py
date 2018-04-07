@@ -55,9 +55,9 @@ class Grammar(object):
 
         return serialized
 
-    def value(self, parse, extras):
+    def value(self, parse, control, extras):
         rule_name = parse.name
-        return self.rule_map[rule_name].value(parse, extras)
+        return self.rule_map[rule_name].value(parse, control, extras)
 
     def on_load(self, control):
         for r in self.rules:
@@ -83,8 +83,8 @@ class Rule(object):
             "definition": wrap(self.name, self.definition.serialize())
         }
 
-    def value(self, parse, extras):
-        return self.definition.value(parse.children[0], extras)
+    def value(self, parse, control, extras):
+        return self.definition.value(parse.children[0], control, extras)
 
     def referenced_rules(self):
         yield from self.definition.referenced_rules()
@@ -132,8 +132,8 @@ class Tag(Element):
     def serialize(self):
         return self.children[0].serialize()
 
-    def value(self, parse, extras):
-        child_value = self.children[0].value(parse, extras)
+    def value(self, parse, control, extras):
+        child_value = self.children[0].value(parse, control, extras)
         extras[self.name] = child_value
         return child_value
 
@@ -149,9 +149,9 @@ class Map(Element):
     def serialize(self):
         return self.children[0].serialize()
 
-    def value(self, parse, extras):
-        child_value = self.children[0].value(parse, extras)
-        return self.handler(parse, child_value, extras)
+    def value(self, parse, control, extras):
+        child_value = self.children[0].value(parse, control, extras)
+        return self.handler(parse, child_value, control, extras)
 
     def pretty(self, parent_prec):
         return self.children[0].pretty(parent_prec)
@@ -166,8 +166,8 @@ class Sequence(Element):
             "children": [c.serialize() for c in self.children]
         })
 
-    def value(self, parse, extras):
-        child_values = [c.value(c_parse, extras)
+    def value(self, parse, control, extras):
+        child_values = [c.value(c_parse, control, extras)
                         for c, c_parse in zip(self.children, parse.children)]
 
         return child_values
@@ -191,11 +191,11 @@ class Alternative(Element):
                          for i, c in enumerate(self.children)]
         }
 
-    def value(self, parse, extras):
+    def value(self, parse, control, extras):
         # get the index of the child that was matched
         i = int(parse.name[len(self.TAG):])
 
-        return self.children[i].value(parse.children[0], extras)
+        return self.children[i].value(parse.children[0], control, extras)
 
     def pretty(self, parent_prec):
         prec = 1
@@ -218,9 +218,9 @@ class Repetition(Element):
             "child": self.children[0].serialize()
         })
 
-    def value(self, parse, extras):
+    def value(self, parse, control, extras):
         child = self.children[0]
-        child_values = [child.value(c_parse, extras) for c_parse in parse.children]
+        child_values = [child.value(c_parse, control, extras) for c_parse in parse.children]
         return child_values
 
     def pretty(self, parent_prec):
@@ -245,11 +245,11 @@ class Optional(Element):
             "child": self.children[0].serialize()
         })
 
-    def value(self, parse, extras):
+    def value(self, parse, control, extras):
         if not parse.children:
             return self.default
 
-        return self.children[0].value(parse.children[0], extras)
+        return self.children[0].value(parse.children[0], control, extras)
 
     def pretty(self, _parent_prec):
         return '[' + self.children[0].pretty(0) + ']'
@@ -270,8 +270,8 @@ class RuleRef(Element):
             "name": self.rule.name
         }
 
-    def value(self, parse, extras):
-        return self.rule.value(parse, extras)
+    def value(self, parse, control, extras):
+        return self.rule.value(parse, control, extras)
 
     def referenced_rules(self):
         yield self.rule
@@ -291,7 +291,7 @@ class Word(Element):
             "text": self.text
         })
 
-    def value(self, parse, _extras):
+    def value(self, parse, control, _extras):
         assert len(parse.words) == 1
         return parse.words[0]
 
@@ -314,7 +314,7 @@ class List(Element):
             "name": self.name
         })
 
-    def value(self, parse, _extras):
+    def value(self, parse, control, _extras):
         assert len(parse.words) == 1
         return parse.words[0]
 
@@ -338,7 +338,7 @@ class Dictation(Element):
             "type": "dictation",
         })
 
-    def value(self, parse, _extras):
+    def value(self, parse, control, _extras):
         return parse.words
 
     def pretty(self, _parent_prec):
@@ -354,7 +354,7 @@ class DictationWord(Element):
             "type": "dictation_word",
         })
 
-    def value(self, parse, _extras):
+    def value(self, parse, control, _extras):
         assert len(parse.words) == 1
         return parse.words[0]
 
@@ -371,7 +371,7 @@ class SpellingLetter(Element):
             "type": "spelling_letter",
         })
 
-    def value(self, parse, _extras):
+    def value(self, parse, control, _extras):
         assert len(parse.words) == 1
         return parse.words[0]
 

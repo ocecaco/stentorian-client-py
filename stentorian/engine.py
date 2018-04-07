@@ -288,6 +288,8 @@ class Engine(object):
         self.command_grammars.add_callback(
             g, GrammarCallback(control, callback, transform=make_parse_tree))
 
+        grammar.on_load(control)
+
         return control
 
     @synchronize
