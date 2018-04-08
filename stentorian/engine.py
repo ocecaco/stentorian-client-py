@@ -242,7 +242,7 @@ class Engine(object):
         self.client = client
         self.sock = s
 
-        self._synchronize_lock = threading.Lock()
+        self._synchronize_lock = threading.RLock()
 
         self.command_grammars = CallbackManager()
         self.select_grammars = CallbackManager()
@@ -275,7 +275,7 @@ class Engine(object):
         return EngineRegistration(e, self.client, self.engine_registrations)
 
     @synchronize
-    def _command_grammar_load(self, grammar, callback):
+    def command_grammar_load(self, grammar, callback):
         g = self.client.request('command_grammar_load', grammar.serialize())
 
         def make_parse_tree(event):
@@ -288,11 +288,8 @@ class Engine(object):
         self.command_grammars.add_callback(
             g, GrammarCallback(control, callback, transform=make_parse_tree))
 
-        return control
-
-    def command_grammar_load(self, grammar, callback):
-        control = self._command_grammar_load(grammar, callback)
         grammar.on_load(control)
+
         return control
 
     @synchronize
