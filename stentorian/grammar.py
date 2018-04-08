@@ -102,7 +102,7 @@ class Rule(object):
         yield from self.definition.referenced_rules()
 
     def on_load(self, control):
-        self.definition.on_load(control)
+        self.definition._on_load_recursive(control)
 
     def pretty(self):
         exp = ' (exported)' if self.exported else ''
@@ -335,8 +335,7 @@ class List(Element):
             return
 
         for word in self.initial:
-            print('Adding word {}'.format(word))
-            control.list_add(self, word)
+            control.list_append(self, word)
 
     def pretty(self, _parent_prec):
         return '{' + self.name + '}'
