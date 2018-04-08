@@ -1,6 +1,6 @@
 import functools
 
-from .grammar import Alternative, Optional, Tag, Sequence
+from .grammar import Alternative, Optional, Tag, Sequence, ParseContext
 from . import elementparser
 
 
@@ -15,7 +15,7 @@ class ActionCallback(object):
         pass
 
     def phrase_finish(self, control, parse):
-        result = self.grammar.value(parse, control, {})
+        result = self.grammar.value(ParseContext(parse, control, {}))
         result()
 
 
@@ -55,15 +55,17 @@ def command(spec, handler, captures=None):
 def _command(spec, handler, tagged):
     element = elementparser.parse(spec, tagged)
 
-    def new_handler(_parse, _child_value, control, extras, h=handler):
-        capture_values = {k: extras[t.name]
+    def new_handler(_child_value, context, h=handler):
+        capture_values = {k: context.extras[t.name]
                           for k, t in tagged.items()
-                          if t.name in extras}
+                          if t.name in context.extras}
 
         for t in tagged.values():
-            extras.pop(t.name, None)
+            context.extras.pop(t.name, None)
 
-        return h(capture_values, control)
+        capture_values['_control'] = context.control
+
+        return h(capture_values)
 
     return element.map_full(new_handler)
 
