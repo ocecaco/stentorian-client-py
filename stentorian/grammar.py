@@ -314,10 +314,9 @@ class Word(Element):
 class List(Element):
     counter = 0
 
-    def __init__(self, initial=None):
+    def __init__(self):
         super().__init__([])
         self.name = 'list_' + str(List.counter)
-        self.initial = initial
         List.counter += 1
 
     def serialize(self):
@@ -329,13 +328,6 @@ class List(Element):
     def value(self, context):
         assert len(context.parse_tree.words) == 1
         return context.parse_tree.words[0]
-
-    def on_load(self, control):
-        if not self.initial:
-            return
-
-        for word in self.initial:
-            control.list_append(self, word)
 
     def pretty(self, _parent_prec):
         return '{' + self.name + '}'
